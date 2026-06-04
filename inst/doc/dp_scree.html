@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>DP scree in dppca</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">DP scree in dppca</h1>
+
+
+
+<p>This article describes the scree estimation used in the
+<code>dppca</code> package. The main idea is to rewrite each scree value
+as a mean estimation problem.</p>
+<p>The package considers three main methods as follows.</p>
+<ol style="list-style-type: decimal">
+<li><strong>Clipped mean using Gaussian noise</strong></li>
+<li><strong>Huber GDP mean based on noisy gradient descent</strong></li>
+<li><strong>Private modified winsorized mean (PMWM)</strong></li>
+</ol>
+<div id="overview" class="section level2">
+<h2>Overview</h2>
+<p>Let <span class="math display">\[
+X \in \mathbb{R}^{n \times p}
+\]</span></p>
+<p>be the preprocessed data matrix. This means that the data have been
+centered, and possibly standardized.</p>
+<p>Let <span class="math display">\[
+V_k = [v_1,\ldots,v_k] \in \mathbb{R}^{p \times k}
+\]</span></p>
+<p>be the matrix of PC directions. Depending on the analysis, <span class="math inline">\(V_k\)</span> may be non-private or differentially
+private.</p>
+<p>The goal is to estimate the scree vector <span class="math inline">\(\lambda = (\lambda_1,\ldots,\lambda_k)\)</span> in
+a differentially private way.</p>
+<p>In the sample PCA case, the <span class="math inline">\(\ell\)</span>-th scree value is</p>
+<p><span class="math display">\[
+\hat\lambda_\ell
+=
+v_\ell^\top \hat\Sigma v_\ell
+\quad \text{where} \quad
+\hat\Sigma = \frac{1}{n-1}X^\top X.
+\]</span></p>
+<p>In <code>dppca</code>, we construct private estimates <span class="math inline">\(\widetilde\lambda_1,\ldots,\widetilde\lambda_k\)</span>
+and use them to build a differentially private scree plot.</p>
+<div id="scree-estimation-in-dppca" class="section level3">
+<h3>Scree Estimation in dppca</h3>
+<p>For the <span class="math inline">\(\ell\)</span>-th principal
+component direction <span class="math inline">\(v_\ell\)</span>, define
+the score vector <span class="math inline">\(z_\ell = X
+v_\ell\)</span>.</p>
+<p>The sample variance of the <span class="math inline">\(\ell\)</span>-th score vector is</p>
+<p><span class="math display">\[
+\hat\lambda_\ell
+=
+\frac{1}{n-1}
+\sum_{i=1}^n
+z_{i\ell}^2
+=
+\frac{n}{n-1}
+\left(
+\frac{1}{n}\sum_{i=1}^n w_{i\ell}
+\right)
+\quad \text{where} \quad
+w_{i\ell} = z_{i\ell}^2.
+\]</span></p>
+<p>Therefore, for each component <span class="math inline">\(\ell\)</span>, scree estimation can be viewed as a
+mean estimation problem for <span class="math inline">\(w_{1\ell},\ldots,w_{n\ell}\)</span>.</p>
+<p>In <code>dppca</code>, we want to construct a differentially private
+estimate of <span class="math inline">\(\widehat{\lambda}_\ell\)</span>,
+denoted by <span class="math inline">\(\widetilde{\lambda}_\ell\)</span>. So, we first
+privately estimate the mean of <span class="math inline">\(W_{1\ell},\ldots,W_{n\ell}\)</span>, and then
+rescale it by <span class="math inline">\(n/(n-1)\)</span>.</p>
+<p><span class="math display">\[
+\widetilde{\lambda}_\ell
+=
+\frac{n}{n-1}
+\cdot
+\operatorname{DP-Mean}\left(w_{1\ell},\ldots,w_{n\ell}\right).
+\]</span></p>
+</div>
+</div>
+<div id="method-1-clipped-scree-estimation" class="section level2">
+<h2>Method 1: Clipped scree estimation</h2>
+<p>The simplest way to privately estimate the mean of <span class="math inline">\(w_{1\ell},\ldots,w_{n\ell}\)</span> is to first
+clip the values to a bounded interval and then add Gaussian noise.</p>
+<div id="clipping" class="section level3">
+<h3>Clipping</h3>
+<p>Choose a clipping threshold <span class="math display">\[
+C &gt; 0.
+\]</span></p>
+<p>Define the clipped observations by <span class="math inline">\(w_{i\ell}^{\mathrm{clip}} = \min(w_{i\ell},
+C)\)</span>.</p>
+<p>Then <span class="math display">\[
+0 \leq w_{i\ell}^{\mathrm{clip}} \leq C.
+\]</span></p>
+<p>The clipped empirical mean is</p>
+<p><span class="math display">\[
+\hat\mu_\ell^{\mathrm{clip}}
+=
+\frac{1}{n}
+\sum_{i=1}^n
+w_{i\ell}^{\mathrm{clip}}
+=
+\frac{1}{n}
+\sum_{i=1}^n
+\min(w_{i\ell}, C).
+\]</span></p>
+<p>The corresponding non-private clipped scree estimate is <span class="math display">\[
+\hat\lambda_\ell^{\mathrm{clip}} = \frac{n}{n-1}
+\hat\mu_\ell^{\mathrm{clip}}.
+\]</span></p>
+</div>
+<div id="sensitivity" class="section level3">
+<h3>Sensitivity</h3>
+<p>Because each clipped observation lies in <span class="math inline">\([0,C]\)</span>, changing one observation can
+change the mean by at most <span class="math inline">\(\frac{C}{n}\)</span>.</p>
+<p>After multiplying by <span class="math inline">\(n/(n-1)\)</span>,
+the sensitivity of the clipped scree estimate is</p>
+<p><span class="math display">\[
+\Delta_\ell
+\leq
+\frac{n}{n-1}
+\cdot
+\frac{C}{n}
+=
+\frac{C}{n-1}.
+\]</span></p>
+</div>
+<div id="dp-clipped-scree-estimate" class="section level3">
+<h3>DP clipped scree estimate</h3>
+<p>For privacy parameters <span class="math inline">\((\epsilon_\ell,\delta_\ell)\)</span>, the Gaussian
+mechanism releases</p>
+<p><span class="math display">\[
+\widetilde\lambda_\ell^{\mathrm{clip}}
+=
+\hat\lambda_\ell^{\mathrm{clip}}
++
+\xi_\ell,
+\]</span></p>
+<p>where</p>
+<p><span class="math display">\[
+\xi_\ell \sim N(0,\sigma_\ell^2)
+\]</span> and <span class="math display">\[
+\sigma_\ell
+=
+\frac{\Delta_\ell\sqrt{2\log(1.25/\delta_\ell)}}{\epsilon_\ell}
+=
+\frac{(C/(n-1))\sqrt{2\log(1.25/\delta_\ell)}}{\epsilon_\ell}.
+\]</span></p>
+</div>
+<div id="parameter" class="section level3">
+<h3>Parameter</h3>
+<p>Clipped scree estimation is simple and easy to implement, but it
+depends on the choice of the clipping threshold <span class="math inline">\(C\)</span>.</p>
+<ul>
+<li>If <span class="math inline">\(C\)</span> is too small, the scree
+values may be underestimated.</li>
+<li>If <span class="math inline">\(C\)</span> is too large, the required
+privacy noise may increase.</li>
+</ul>
+</div>
+<div id="example-usage" class="section level3">
+<h3>Example usage</h3>
+<p>In the <code>dppca</code>, we set clipped-mean parameter by</p>
+<p><span class="math display">\[
+\texttt{scree\_clipped\_control(C\_clip = C)}.
+\]</span></p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(dppca)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">dp_scree</span>(</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>  X,</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>  <span class="at">k =</span> <span class="dv">3</span>,</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;clipped&quot;</span>,</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  <span class="at">eps_total =</span> <span class="dv">1</span>,</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>  <span class="at">delta_total =</span> <span class="fl">1e-6</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  <span class="at">center =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  <span class="at">standardize =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">clipped_control</span>(</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>    <span class="at">C_clip =</span> <span class="dv">3</span></span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>  )</span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+</div>
+<div id="method-2-huber-scree-estimation" class="section level2">
+<h2>Method 2: Huber scree estimation</h2>
+<p>The Huber method is based on the differentially private robust mean
+estimator of <a href="#ref-Yu2024">Yu, Ren, and Zhou (2024)</a>. For
+each component <span class="math inline">\(\ell\)</span>, it estimates
+the mean of <span class="math inline">\(w_{1\ell},\ldots,w_{n\ell}\)</span> using a robust
+loss function instead of the ordinary sample mean.</p>
+<div id="huber-loss" class="section level3">
+<h3>Huber loss</h3>
+<p>For a robustification parameter <span class="math inline">\(\tau &gt;
+0\)</span>, the Huber loss is</p>
+<p><span class="math display">\[
+\rho_\tau(r)
+=
+\begin{cases}
+\frac{1}{2}r^2, &amp; |r| \leq \tau,\\
+\tau |r| - \frac{1}{2}\tau^2, &amp; |r| &gt; \tau.
+\end{cases}
+\]</span></p>
+<p>For small residuals, the Huber loss behaves like squared error loss.
+For large residuals, it grows linearly, which reduces the influence of
+extreme observations.</p>
+<p>The derivative of the Huber loss is the score function</p>
+<p><span class="math display">\[
+\psi_\tau(r)
+=
+\rho_\tau&#39;(r)
+=
+\begin{cases}
+-\tau, &amp; r &lt; -\tau,\\
+r, &amp; |r| \leq \tau,\\
+\tau, &amp; r &gt; \tau.
+\end{cases}
+\]</span></p>
+<p>Thus, <span class="math inline">\(\psi_\tau(r)\)</span> clips the
+residual <span class="math inline">\(r\)</span> to the interval <span class="math inline">\([-\tau,\tau]\)</span>.</p>
+</div>
+<div id="huber-mean-estimator" class="section level3">
+<h3>Huber mean estimator</h3>
+<p>For the <span class="math inline">\(\ell\)</span>-th component, the
+Huber mean estimator is defined as</p>
+<p><span class="math display">\[
+\hat\mu_{\tau,\ell}
+\in
+\arg\min_{\mu \in \mathbb{R}}
+\frac{1}{n}
+\sum_{i=1}^n
+\rho_\tau(w_{i\ell}-\mu).
+\]</span></p>
+<p>The first-order condition is</p>
+<p><span class="math display">\[
+\frac{1}{n}
+\sum_{i=1}^n
+\psi_\tau(w_{i\ell}-\mu)
+=
+0.
+\]</span></p>
+<p>This equation shows that large residuals are clipped through the
+score function. As a result, the estimator is less sensitive to outliers
+than the ordinary mean.</p>
+</div>
+<div id="noisy-gradient-descent" class="section level3">
+<h3>Noisy gradient descent</h3>
+<p>The Huber objective is optimized using noisy gradient descent.</p>
+<p>Given the current estimate <span class="math inline">\(\mu_\ell^{(t)}\)</span> at iteration <span class="math inline">\(t\)</span>, we define the corresponding residuals
+as</p>
+<p><span class="math display">\[
+r_{i\ell}^{(t)}
+=
+w_{i\ell}
+-
+\mu_\ell^{(t)},
+\qquad i=1,\ldots,n.
+\]</span></p>
+<p>The clipped score values are <span class="math inline">\(\psi_\tau(r_{i\ell}^{(t)})\)</span>,</p>
+<p>and the average gradient type quantity is</p>
+<p><span class="math display">\[
+g_\ell^{(t)}
+=
+\frac{1}{n}
+\sum_{i=1}^n
+\psi_\tau(r_{i\ell}^{(t)}).
+\]</span></p>
+<p>A non-private update would take the form</p>
+<p><span class="math display">\[
+\mu_\ell^{(t+1)}
+=
+\mu_\ell^{(t)}
++
+\eta_t g_\ell^{(t)}
+\quad \text{where} \quad
+\eta_t &gt; 0 \quad \text{is the step size.}
+\]</span></p>
+<p>To ensure privacy, Gaussian noise is added at each iteration.</p>
+<p><span class="math display">\[
+\mu_\ell^{(t+1)} = \mu_\ell^{(t)} + \eta_t g_\ell^{(t)} + \xi_\ell^{(t)}
+\quad \text{where} \quad
+\xi_\ell^{(t)} \sim N(0,\sigma_{t,\ell}^2).
+\]</span></p>
+</div>
+<div id="sensitivity-of-one-gradient-step" class="section level3">
+<h3>Sensitivity of one gradient step</h3>
+<p>Since</p>
+<p><span class="math display">\[
+\psi_\tau(r) \in [-\tau,\tau],
+\]</span></p>
+<p>changing one observation can change the average score by at most
+<span class="math inline">\(\frac{2\tau}{n}\)</span>.</p>
+<p>After multiplying by the step size <span class="math inline">\(\eta_t\)</span>, the one-step sensitivity is</p>
+<p><span class="math display">\[
+\Delta_{\mathrm{step}} = \frac{2\eta_t \tau}{n}.
+\]</span></p>
+<p>This sensitivity determines the scale of the Gaussian noise added at
+each gradient step.</p>
+</div>
+<div id="dp-huber-scree-estimate" class="section level3">
+<h3>DP Huber scree estimate</h3>
+<p>After <span class="math inline">\(T\)</span> noisy gradient descent
+steps, let the final private Huber mean estimate be</p>
+<p><span class="math display">\[
+\mu_\ell^{(T)}.
+\]</span></p>
+<p>The final Huber scree estimate is</p>
+<p><span class="math display">\[
+\widetilde\lambda_\ell^{\mathrm{Huber}}
+=
+\frac{n}{n-1}
+\mu_\ell^{(T)}.
+\]</span></p>
+<p>The Huber method is useful when the squared scores <span class="math inline">\(w_{i\ell}\)</span> may be heavy-tailed or affected
+by outliers.</p>
+</div>
+<div id="robustification-parameter" class="section level3">
+<h3>Robustification parameter</h3>
+<p>The robustification parameter <span class="math inline">\(\tau\)</span> controls the trade-off between bias,
+robustness, and privacy.</p>
+<p>A small <span class="math inline">\(\tau\)</span> gives stronger
+clipping and more robustness, but may increase the bias of the
+estimator. A large <span class="math inline">\(\tau\)</span> behaves
+more like the ordinary mean, but may be less robust and may require more
+noise.</p>
+<p>In the Huber DP mean, <span class="math inline">\(\tau\)</span> is
+chosen using a scale quantity related to the second moment. A typical
+theoretical form is</p>
+<p><span class="math display">\[
+\tau
+\asymp
+\sqrt{m_2}
+\left(
+\frac{\epsilon n}
+{\sqrt{(d+\log n)\log n}}
+\right)^{1/2},
+\]</span></p>
+<p>where</p>
+<p><span class="math display">\[
+m_2 = \mathbb{E}\|X-\mu\|_2^2 \quad \text{is a second-moment scale.}
+\]</span></p>
+<p>Because <span class="math inline">\(m_2\)</span> is usually unknown
+and can be sensitive to outliers, it may need to be estimated robustly
+and privately. we use a <a href="algorithms.html#alg-m2">private robust
+estimator for <span class="math inline">\(m_2\)</span></a> described in
+Algorithm 2.</p>
+</div>
+<div id="other-control-parameters" class="section level3">
+<h3>Other control parameters</h3>
+<p>The Huber scree method also uses additional control parameters for
+noisy gradient descent and for the private scale-proxy step used to
+estimate <span class="math inline">\(m_2\)</span>. The default values
+are chosen based on the recommendations in the <a href="#ref-Yu2024">Yu,
+Ren, and Zhou (2024)</a></p>
+<ul>
+<li><p><code>mu0</code>: Initial value for noisy gradient descent.
+(default: <span class="math inline">\(\mu_\ell^{(0)} =
+0\)</span>)</p></li>
+<li><p><code>eta0</code>: Step size for noisy gradient descent.
+(default: <span class="math inline">\(\eta_0 = 1\)</span>)</p></li>
+<li><p><code>T</code>: Number of noisy gradient descent iterations.
+(default: <span class="math inline">\(T = \lfloor \log n
+\rfloor\)</span>)</p></li>
+<li><p><code>M</code>: Number of blocks used in the private estimator
+for <span class="math inline">\(m_2\)</span>. (default: <span class="math inline">\(M = \lfloor \sqrt{n}/2 \rfloor\)</span>)</p></li>
+<li><p><code>k_min_m2</code> and <code>k_max_m2</code>: Lower and upper
+dyadic bin indices used in the private histogram step for estimating
+<span class="math inline">\(m_2\)</span>. The histogram searches over
+scale levels <span class="math inline">\(2^k\)</span> for</p>
+<p><span class="math display">\[
+k_{\min} \le k \le k_{\max}.
+\]</span></p></li>
+<li><p><code>m2_frac</code>: Fraction of the Huber scree privacy budget
+used to privately estimate <span class="math inline">\(m_2\)</span>.</p>
+<p>If <span class="math inline">\((\epsilon_{\mathrm{scree}},\delta_{\mathrm{scree}})\)</span>
+is the budget for Huber scree estimation, then <span class="math inline">\((\epsilon_{m_2},\delta_{m_2}) =
+\text{m2_frac}\cdot
+(\epsilon_{\text{scree}},\delta_{\text{scree}})\)</span>, while the
+remaining budget <span class="math inline">\((\epsilon_{\text{gd}},\delta_{\text{gd}}) =
+(1-\text{m2_frac})\cdot
+(\epsilon_{\text{scree}},\delta_{\text{scree}})\)</span> is used for
+Huber noisy gradient descent.</p></li>
+</ul>
+</div>
+<div id="example-usage-1" class="section level3">
+<h3>Example usage</h3>
+<p>In <code>dppca</code>, the Huber scree estimator is controlled by</p>
+<p><span class="math display">\[
+\texttt{scree\_huber\_control(
+mu0,\ eta0,\ T,\ M,\ k\_min\_m2,\ k\_max\_m2,\ m2\_frac)}.
+\]</span></p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">dp_scree</span>(</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>  X,</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>  <span class="at">k =</span> <span class="dv">3</span>,</span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;huber&quot;</span>,</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>  <span class="at">eps_total =</span> <span class="dv">1</span>,</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>  <span class="at">delta_total =</span> <span class="fl">1e-6</span>,</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>  <span class="at">center =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>  <span class="at">standardize =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">huber_control</span>(</span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>    <span class="at">mu0 =</span> <span class="dv">0</span>,</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>    <span class="at">eta0 =</span> <span class="dv">1</span>,</span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>    <span class="at">T =</span> <span class="dv">50</span>,</span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>    <span class="at">M =</span> <span class="dv">20</span>,</span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a>    <span class="at">k_min_m2 =</span> <span class="sc">-</span><span class="dv">40</span>,</span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a>    <span class="at">k_max_m2 =</span> <span class="dv">40</span>,</span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a>    <span class="at">m2_frac =</span> <span class="dv">1</span><span class="sc">/</span><span class="dv">4</span></span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a>  )</span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+</div>
+<div id="method-3-private-modified-winsorized-mean-scree-estimation" class="section level2">
+<h2>Method 3: Private modified winsorized mean scree estimation</h2>
+<p>The PMWM method is based on the private modified winsorized mean of
+<a href="#ref-Ramsay2025">Ramsay and Spicker (2025)</a>. For each
+component <span class="math inline">\(\ell\)</span>, it estimates the
+mean of <span class="math inline">\(w_{1\ell},\ldots,w_{n\ell}\)</span>
+by privately estimating tail quantiles, winsorizing the data, and then
+adding noise to the winsorized mean.</p>
+<div id="non-private-modified-winsorized-mean" class="section level3">
+<h3>Non-private modified winsorized mean</h3>
+<p>The PMWM method builds on the non-private modified winsorized mean of
+<a href="#ref-Lugosi2021">Lugosi and Mendelson (2021)</a>.</p>
+<p>The non-private modified winsorized mean starts with a clipping
+proportion <span class="math inline">\(0 &lt; p &lt;
+\frac{1}{2}\)</span>, which determines the lower and upper tail
+quantiles used for winsorization.</p>
+<p>Let <span class="math inline">\(\hat\xi_p \quad\text{and}\quad
+\hat\xi_{1-p}\)</span> be empirical lower and upper quantiles.</p>
+<p>Define the function</p>
+<p><span class="math display">\[
+\phi_{a,b}(x)
+=
+\begin{cases}
+a, &amp; x &lt; a,\\
+x, &amp; a \leq x \leq b,\\
+b, &amp; x &gt; b.
+\end{cases}
+\]</span></p>
+<p>The non-private modified winsorized mean is</p>
+<p><span class="math display">\[
+\hat\mu_p
+=
+\frac{1}{n}
+\sum_{i=1}^n
+\phi_{\hat\xi_p,\hat\xi_{1-p}}(X_i).
+\]</span></p>
+<p>The idea is to first estimate the lower and upper tail cutoffs, and
+then winsorize the data by replacing extreme values with the
+corresponding cutoffs.</p>
+</div>
+<div id="sample-splitting-notation" class="section level3">
+<h3>Sample splitting notation</h3>
+<p>In the theoretical description, the data may be split into two
+subsets:</p>
+<ul>
+<li>a quantile estimation subset with size <span class="math inline">\(n_q\)</span>,</li>
+<li>a mean estimation subset with size <span class="math inline">\(n_m\)</span>.</li>
+</ul>
+<p>If the full sample size is <span class="math inline">\(n\)</span>, a
+simple split is <span class="math display">\[
+n_q = n_m = \frac{n}{2}.
+\]</span></p>
+<p>In practice, the implementation may use all available observations at
+each step instead of splitting the sample.</p>
+</div>
+<div id="private-quantile-estimation" class="section level3">
+<h3>Private quantile estimation</h3>
+<p>PMWM uses private quantile estimates instead of non-private empirical
+quantiles. For component <span class="math inline">\(\ell\)</span>, let
+the clipping proportion be <span class="math display">\[
+p_\ell = \zeta_\ell.
+\]</span></p>
+<p>A theoretical choice has the form</p>
+<p><span class="math display">\[
+\zeta_\ell
+=
+16\eta
++
+\frac{112}{3}
+\frac{
+\log\left(32(\beta(u-\ell)/(\beta-1)\vee 1)/\delta\right)
+}
+{n_q},
+\]</span></p>
+<p>where</p>
+<ul>
+<li><span class="math inline">\(\eta\)</span>: Contamination level,</li>
+<li><span class="math inline">\(\beta &gt; 1\)</span>: Log-grid
+parameter in the private quantile estimator,</li>
+<li><span class="math inline">\(\ell, u\)</span>: Lower and upper search
+bounds used in private quantile estimation.</li>
+<li><span class="math inline">\(\delta\)</span>: Confidence parameter
+controlling the high-probability accuracy statement of the PMWM
+estimator.</li>
+<li><span class="math inline">\(n_q\)</span>: Number of observations
+used for quantile estimation.</li>
+</ul>
+<p>For practical implementation, the paper suggests using the clipping
+proportion</p>
+<p><span class="math display">\[
+p
+=
+\frac{C}{n_q} \vee \eta,
+\]</span></p>
+<p>where <span class="math inline">\(C\)</span> is a user-chosen
+trimming constant. This is also the choice used in the
+<code>dppca</code> package.</p>
+</div>
+<div id="winsorized-mean" class="section level3">
+<h3>Winsorized mean</h3>
+<p>Let <span class="math inline">\(L_\ell\)</span> and <span class="math inline">\(U_\ell\)</span> be private estimates of the lower
+and upper quantiles.</p>
+<p><span class="math display">\[
+L_\ell \approx Q_{\zeta_\ell}(w_{1\ell},\ldots,w_{n\ell}),
+\quad \text{and} \quad
+U_\ell \approx Q_{1-\zeta_\ell}(w_{1\ell},\ldots,w_{n\ell}).
+\]</span></p>
+<p>Define the winsorized observations by</p>
+<p><span class="math display">\[
+w_{i\ell}^{\mathrm{win}}
+=
+\min\left\{
+\max(w_{i\ell},L_\ell),
+U_\ell
+\right\}.
+\]</span></p>
+<p>Equivalently,</p>
+<ul>
+<li>if <span class="math inline">\(w_{i\ell} &lt; L_\ell\)</span>,
+replace it by <span class="math inline">\(L_\ell\)</span>;</li>
+<li>if <span class="math inline">\(L_\ell \leq w_{i\ell} \leq
+U_\ell\)</span>, keep it unchanged;</li>
+<li>if <span class="math inline">\(w_{i\ell} &gt; U_\ell\)</span>,
+replace it by <span class="math inline">\(U_\ell\)</span>.</li>
+</ul>
+<p>Thus, <span class="math display">\[
+L_\ell
+\leq
+w_{i\ell}^{\mathrm{win}}
+\leq
+U_\ell.
+\]</span></p>
+<p>Using the mean estimation subset <span class="math inline">\(I_m\)</span>, define <span class="math inline">\(\hat\mu_\ell^{\mathrm{win}} = \frac{1}{n_m}
+\sum_{i\in I_m} w_{i\ell}^{\mathrm{win}}\)</span>.</p>
+<p>The corresponding non-private winsorized scree estimate is</p>
+<p><span class="math display">\[
+\hat\lambda_\ell^{\mathrm{PMWM,np}}
+=
+\frac{n}{n-1}
+\hat\mu_\ell^{\mathrm{win}}.
+\]</span></p>
+</div>
+<div id="sensitivity-1" class="section level3">
+<h3>Sensitivity</h3>
+<p>Because all winsorized observations lie in <span class="math inline">\([L_\ell,U_\ell]\)</span>, the sensitivity of the
+winsorized mean is</p>
+<p><span class="math display">\[
+\Delta_\ell^{(\mu)}
+=
+\frac{U_\ell-L_\ell}{n_m}.
+\]</span></p>
+<p>After multiplying by <span class="math inline">\(n/(n-1)\)</span>,
+the scree sensitivity is <span class="math inline">\(\Delta_\ell^{(\lambda)} = \frac{n}{n-1} \cdot
+\frac{U_\ell-L_\ell}{n_m}\)</span>.</p>
+</div>
+<div id="dp-pmwm-scree-estimate" class="section level3">
+<h3>DP PMWM scree estimate</h3>
+<p>The final PMWM scree estimate can be written as</p>
+<p><span class="math display">\[
+\widetilde\lambda_\ell^{\mathrm{PMWM}}
+=
+\hat\lambda_\ell^{\mathrm{PMWM,np}} + Z_\ell
+\quad \text{where} \quad
+Z_\ell \sim N(0,\sigma_\ell^2).
+\]</span></p>
+<p>For privacy parameters <span class="math inline">\((\epsilon_{M,\ell},\delta_{M,\ell})\)</span>, the
+noise scale is</p>
+<p><span class="math display">\[
+\sigma_\ell
+=
+\frac{
+\Delta_\ell^{(\lambda)}
+\sqrt{2\log(1.25/\delta_{M,\ell})}
+}
+{\epsilon_{M,\ell}}
+=
+\frac{
+\left(
+\frac{n}{n-1}
+\cdot
+\frac{U_\ell-L_\ell}{n_m}
+\right)
+\sqrt{2\log(1.25/\delta_{M,\ell})}
+}
+{\epsilon_{M,\ell}}.
+\]</span></p>
+</div>
+<div id="privacy-budget-splitting" class="section level3">
+<h3>Privacy budget splitting</h3>
+<p>PMWM uses privacy budget for both private quantile estimation and
+private mean estimation.</p>
+<p>For component <span class="math inline">\(\ell\)</span>, let the
+total component-level budget be <span class="math inline">\((\epsilon_\ell,\delta_\ell)\)</span>.</p>
+<p>This can be split as <span class="math display">\[
+\epsilon_\ell
+=
+\epsilon_{Q,\ell}
++
+\epsilon_{M,\ell},
+\qquad
+\delta_\ell
+=
+\delta_{Q,\ell}
++
+\delta_{M,\ell}.
+\]</span></p>
+<p>The quantile budget itself is used to estimate two quantiles, so it
+can be split again.</p>
+<p><span class="math display">\[
+\epsilon_{Q,\ell}
+=
+\epsilon_{q1,\ell}
++
+\epsilon_{q2,\ell},
+\qquad
+\delta_{Q,\ell}
+=
+\delta_{q1,\ell}
++
+\delta_{q2,\ell}.
+\]</span></p>
+</div>
+<div id="parameters" class="section level3">
+<h3>Parameters</h3>
+<p>The PMWM scree estimator uses additional parameters for private
+quantile estimation and winsorization.</p>
+<ul>
+<li><p><code>beta</code>: Log-binning base used in the private quantile
+estimator.</p>
+<p>It determines the spacing of the geometric search grid and must
+satisfy <span class="math inline">\(\beta &gt; 1\)</span>.</p></li>
+<li><p><code>a</code>, <code>b</code>: Lower and upper search bounds
+supplied to the private quantile. The private lower and upper clipping
+cutoffs are searched within this range.</p></li>
+<li><p><code>trim_const</code>, <code>eta</code>: Parameters used to set
+the practical clipping proportion <span class="math display">\[
+p
+=
+\min\left\{
+\max\left(\frac{\texttt{trim\_const}}{n_q}, \eta\right),
+0.49
+\right\}.
+\]</span> Here, <code>trim_const / n_q</code> controls the baseline
+clipping level, while <code>eta</code> gives a lower bound reflecting
+the expected contamination level.</p></li>
+<li><p><code>split_mode</code>: Logical value indicating whether the
+sample is split into two parts.</p>
+<p>If <code>TRUE</code>, one part is used for private quantile
+estimation and the other part is used for the winsorized mean step. If
+<code>FALSE</code>, all observations are used in both steps.</p></li>
+<li><p><code>max_extra_bins</code>: Maximum number of additional
+log-grid bins searched beyond the largest occupied bin in the private
+quantile.</p></li>
+</ul>
+</div>
+<div id="example-usage-2" class="section level3">
+<h3>Example usage</h3>
+<p>In <code>dppca</code>, the PMWM-specific parameters can be specified
+through</p>
+<p><span class="math display">\[
+\text{scree_pmw_control(
+beta = beta,a = a,b = b, trim_const = C, eta = eta split_mode = split)}
+\]</span></p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">dp_scree</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  X,</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>  <span class="at">k =</span> <span class="dv">3</span>,</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;pmwm&quot;</span>,</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="at">eps_total =</span> <span class="dv">1</span>,</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>  <span class="at">delta_total =</span> <span class="fl">1e-6</span>,</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>  <span class="at">center =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a>  <span class="at">standardize =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">pmwm_control</span>(</span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>    <span class="at">beta =</span> <span class="fl">1.01</span>,</span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>    <span class="at">a =</span> <span class="dv">0</span>,</span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a>    <span class="at">b =</span> <span class="dv">10</span>,</span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a>    <span class="at">trim_const =</span> <span class="dv">10</span>,</span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a>    <span class="at">eta =</span> <span class="fl">0.01</span>,</span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a>    <span class="at">split_mode =</span> <span class="cn">TRUE</span></span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a>  )</span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+</div>
+<div id="post-processing" class="section level2">
+<h2>Post-processing</h2>
+<p>Because of the added privacy noise, the raw DP scree estimates</p>
+<p><span class="math display">\[
+(\widetilde\lambda_1,\ldots,\widetilde\lambda_k)
+\]</span></p>
+<p>may not have the usual scree shape. They may not be decreasing, and
+some values may be negative.</p>
+<p>In ordinary PCA, scree values satisfy</p>
+<p><span class="math display">\[
+\lambda_1 \ge \lambda_2 \ge \cdots \ge \lambda_k \ge 0.
+\]</span></p>
+<p>Therefore, <code>dppca</code> can apply post-processing to make the
+DP scree estimates nonnegative and decreasing.</p>
+<p><span class="math display">\[
+\widetilde\lambda_1^{\mathrm{mono}}
+\ge
+\widetilde\lambda_2^{\mathrm{mono}}
+\ge
+\cdots
+\ge
+\widetilde\lambda_k^{\mathrm{mono}}
+\ge
+0.
+\]</span></p>
+<p>If monotone post-processing is used, the PVE can be computed from the
+post-processed scree values.</p>
+<p><span class="math display">\[
+\widetilde{\operatorname{PVE}}_\ell^{\mathrm{mono}}
+=
+\frac{\widetilde\lambda_\ell^{\mathrm{mono}}}
+{\sum_{j=1}^k \widetilde\lambda_j^{\mathrm{mono}}}.
+\]</span></p>
+<p>This step only modifies the already released DP estimates, so it does
+not use any additional privacy budget.</p>
+<div id="example-usage-3" class="section level3">
+<h3>Example usage</h3>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">dp_scree_plot</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  X,</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="at">k =</span> <span class="dv">3</span>,</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="at">dp_scree_method =</span> <span class="st">&quot;clipped&quot;</span>,</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="at">eps_total =</span> <span class="dv">1</span>,</span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="at">delta_total =</span> <span class="fl">1e-6</span>,</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">clipped_control</span>(</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>    <span class="at">C_clip =</span> <span class="dv">3</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a>  )</span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">dp_scree_plot</span>(</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  X,</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>  <span class="at">k =</span> <span class="dv">3</span>,</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  <span class="at">dp_scree_method =</span> <span class="st">&quot;all&quot;</span>,</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  <span class="at">eps_total =</span> <span class="dv">1</span>,</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>  <span class="at">delta_total =</span> <span class="fl">1e-6</span>,</span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>  <span class="at">center =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>  <span class="at">standardize =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">list</span>(</span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>    <span class="at">clipped =</span> <span class="fu">clipped_control</span>(</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a>      <span class="at">C_clip =</span> <span class="dv">3</span></span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>    ),</span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a>    <span class="at">pmwm =</span> <span class="fu">pmwm_control</span>(</span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a>      <span class="at">beta =</span> <span class="fl">1.01</span>,</span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a>      <span class="at">a =</span> <span class="dv">0</span>,</span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a>      <span class="at">b =</span> <span class="dv">10</span>,</span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a>      <span class="at">trim_const =</span> <span class="dv">10</span>,</span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a>      <span class="at">eta =</span> <span class="fl">0.01</span>,</span>
+<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a>      <span class="at">split_mode =</span> <span class="cn">TRUE</span></span>
+<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a>    ),</span>
+<span id="cb5-21"><a href="#cb5-21" tabindex="-1"></a>    <span class="at">huber =</span> <span class="fu">huber_control</span>(</span>
+<span id="cb5-22"><a href="#cb5-22" tabindex="-1"></a>      <span class="at">mu0 =</span> <span class="dv">0</span>,</span>
+<span id="cb5-23"><a href="#cb5-23" tabindex="-1"></a>      <span class="at">eta0 =</span> <span class="dv">1</span>,</span>
+<span id="cb5-24"><a href="#cb5-24" tabindex="-1"></a>      <span class="at">T =</span> <span class="dv">50</span>,</span>
+<span id="cb5-25"><a href="#cb5-25" tabindex="-1"></a>      <span class="at">M =</span> <span class="dv">20</span>,</span>
+<span id="cb5-26"><a href="#cb5-26" tabindex="-1"></a>      <span class="at">k_min_m2 =</span> <span class="sc">-</span><span class="dv">40</span>,</span>
+<span id="cb5-27"><a href="#cb5-27" tabindex="-1"></a>      <span class="at">k_max_m2 =</span> <span class="dv">40</span>,</span>
+<span id="cb5-28"><a href="#cb5-28" tabindex="-1"></a>      <span class="at">m2_frac =</span> <span class="dv">1</span><span class="sc">/</span><span class="dv">4</span></span>
+<span id="cb5-29"><a href="#cb5-29" tabindex="-1"></a>    )</span>
+<span id="cb5-30"><a href="#cb5-30" tabindex="-1"></a>  )</span>
+<span id="cb5-31"><a href="#cb5-31" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+</div>
+<div id="references" class="section level2">
+<h2>References</h2>
+<p><span id="ref-Yu2024"></span> Myeonghun Yu. Zhao Ren. Wen-Xin Zhou.
+“Gaussian differentially private robust mean estimation and inference”.
+Bernoulli 30 (4) 3059 - 3088, November 2024. <a href="https://doi.org/10.3150/23-BEJ1706" class="uri">https://doi.org/10.3150/23-BEJ1706</a></p>
+<p><span id="ref-Ramsay2025"></span> Kelly Ramsay and Dylan Spicker.
+(2025). “Improved subsample-and-aggregate via the private modified
+winsorized mean”. arXiv preprint. <a href="https://arxiv.org/abs/2501.14095" class="uri">https://arxiv.org/abs/2501.14095</a></p>
+<p><span id="ref-Lugosi2021"></span> Gábor Lugosi. Shahar Mendelson.
+“Robust multivariate mean estimation: The optimality of trimmed mean.”
+Ann. Statist. 49 (1) 393 - 410, February 2021. <a href="https://doi.org/10.1214/20-AOS1961" class="uri">https://doi.org/10.1214/20-AOS1961</a></p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
