@@ -5,103 +5,105 @@
 
 #' Differentially private score histograms
 #'
-#' This function computes two-dimensional principal component scores and returns
-#' differentially private histogram estimates on the score space. It returns the
-#' score coordinates, the plotting frame, the non-private histogram, and the
-#' requested private histogram estimates.
+#' This function projects observations onto supplied private directions or
+#' directions estimated by [dp_loading()] and computes two-dimensional score
+#' histograms. Observed coordinates and empirical reference histograms are
+#' returned only when `non_private = TRUE`.
 #'
-#' @param X A numeric matrix or data frame. Rows correspond to observations and
-#'  columns correspond to variables.
-#' @param eps Positive number defining the total `epsilon` privacy parameter.
-#' @param delta Number in `(0, 1)` defining the total `delta` privacy parameter.
-#' @param bins Integer vector of length 2 defining the number of histogram bins
-#'   along the first and second score axes, respectively.
-#' @param method Character vector specifying which private histogram methods to
-#'   compute. Use `"add"` for the additive Gaussian histogram and `"sparse"` for
-#'   the sparse thresholded histogram. The default is `c("add", "sparse")`.
-#' @param center A logical value indicating whether to center the columns of `X`
-#'   before computing principal component directions. The default is `TRUE`.
-#' @param standardize A logical value indicating whether to scale the columns of
-#'   `X` by their sample standard deviations after optional centering. The
-#'   default is `FALSE`.
-#' @param g_dppca A logical value indicating whether to use private principal
-#'   component directions. The default is `FALSE`. See [dp_pc_dir()] for details.
-#' @param cpp.option A logical value passed to [dp_pc_dir()] when
-#'   `g_dppca = TRUE`. The default is `FALSE`.
-#' @param axes Integer vector of length 2 specifying the principal components
-#'   used to construct the score coordinates. The default is `c(1, 2)`.
+#' @param X A numeric matrix or data frame with observations in rows and variables
+#'   in columns. Non-numeric data-frame columns are excluded with a warning;
+#'   numeric values must be finite. At least two observations and two numeric
+#'   features are required. If directions must be estimated, the
+#'   pairwise-separation condition of [dp_loading()] also applies.
+#' @param privacy A [privacy_control()] object allocating budget to `loading`
+#'   and `score` (equal shares by default). Each requested histogram method
+#'   receives the full histogram allocation.
+#' @param bins Positive integer vector of length two giving the number of
+#'   histogram bins along the selected score axes.
+#' @param method One or both histogram methods: `"add"` (Gaussian additive noise)
+#'   and `"sparse"` (thresholded sparse histogram). Default:
+#'   `c("add", "sparse")`.
+#' @param cpp.option Whether to use the compiled spherical-Kendall implementation
+#'   (`TRUE` by default) when estimating private directions; ignored if
+#'   `V_dp` is supplied.
+#' @param axes Two distinct PC indices for the horizontal and vertical score
+#'   axes, respectively (`c(1, 2)` by default). Each must be between `1`
+#'   and the number of numeric PCA features.
+#' @param V_dp Optional `p` by `p` private PC direction matrix (`NULL` by default),
+#'   where `p` is the number of numeric PCA features. Columns must be
+#'   orthonormal and rows must follow the feature order in `X`; matching
+#'   row names are required when both sets of names exist.
+#' @param non_private Whether to compute and store ordinary PCA reference results
+#'   (`FALSE` by default). For score analysis, these include mean-centered ordinary
+#'   PCA scores and empirical reference histograms.
+#' @param group Optional group column name in `X` or vector of group labels
+#'   (`NULL` by default). A selected group column is excluded from PCA
+#'   features, even when numeric; group labels and membership are assumed
+#'   public. All groups share the same private directions,
+#'   frame, and histogram grid.
 #'
 #' @details
-#' Let \eqn{v_a} and \eqn{v_b} be the principal component directions selected
-#' by `axes = c(a, b)` for some \eqn{1 \le a < b \le ncol(X)}.
-#' After preprocessing, the score point for \eqn{i}th observation
-#' is \eqn{s_i = (x_i^\top v_a, x_i^\top v_b)}. A non-private score
-#' plot would display the points \eqn{s_1, \ldots, s_n} directly. This function
-#' instead summarizes their empirical distribution by a two-dimensional histogram
-#' and releases private versions of the histogram for the visualization.
+#' Scores are projected onto the selected private PC directions. Rather than
+#' releasing individual projected coordinates, the function estimates a private
+#' two-dimensional plotting frame followed by private histogram probabilities.
+#' The frame uses two private coordinate medians and an inflated private
+#' 0.99 quantile of distances from their center (inflation factor `1.2`),
+#' using unbounded quantile mechanisms.
 #'
-#' The plotting frame is constructed privately from the score coordinates. The
-#' frame center is estimated by coordinate-wise private medians, and the frame
-#' radius is estimated by the private 0.99 quantile of the Euclidean distances
-#' from this private center. The resulting private radius is inflated by a fixed
-#' factor and used to form a square plotting frame. The private frame is computed
-#' using a smooth-sensitivity based quantile mechanism
-#' \insertCite{nissim2007smooth}{dppca}.
+#' For a fixed frame and directions under replacement adjacency, the histogram
+#' count vector has `l1` sensitivity at most `2` and `l2` sensitivity at most
+#' `sqrt(2)`. Out-of-frame scores are assigned to boundary bins. Adaptive
+#' private directions and frame selection require privacy composition. Input is
+#' not automatically centered or standardized; data-dependent mean centering
+#' or standardization is not covered by the count sensitivity argument.
 #'
-#' The private histogram is computed on the rectangular grid defined by the
-#' private frame and the bin counts in `bins`. Under
-#' row-level adjacency, changing one observation can increase one bin count by
-#' one and decrease another by one, giving \eqn{\ell_1} sensitivity at most
-#' \eqn{2} and \eqn{\ell_2} sensitivity at most \eqn{\sqrt{2}} for the count
-#' vector.
-#'
-#' Two private histogram mechanisms are supported:
+#' Two histogram mechanisms are available:
 #' \itemize{
-#'   \item `"add"` constructs an additive differentially private histogram by
-#'   adding Gaussian noise to all bin counts, clipping negative noisy counts to
-#'   zero, and normalizing the result. This additive-noise approach is commonly
-#'   used for private histograms; see
-#'   \insertCite{wasserman2010statistical;textual}{dppca}.
-#'
-#'   \item `"sparse"` constructs a sparse differentially private histogram for
-#'   settings where many bins are empty. It perturbs only nonzero empirical bin
-#'   proportions and keeps bins whose noisy values exceed a stability threshold,
-#'   following the stability-based private histogram idea of
-#'   \insertCite{karwa2017finite;textual}{dppca}.
+#'   \item `"add"`: Add Gaussian noise to all counts, truncate negatives to
+#'   zero, and normalize. The classical Gaussian calibration has a standard
+#'   sufficient guarantee for `0 < eps_hist < 1`; larger values require a
+#'   separate calibration check. All-zero truncated counts cause an error.
+#'   \item `"sparse"`: Add Laplace noise to nonzero bin proportions, retain
+#'   bins above a privacy-dependent threshold, and normalize positive mass.
+#'   If none survive, return an all-zero histogram.
 #' }
 #'
-#' The privacy parameters are allocated across the privacy-consuming steps. If
-#' `g_dppca = FALSE`, half of `eps` and `delta` is used for private frame
-#' construction and half for the private histogram. If `g_dppca = TRUE`, the
-#' parameters are split equally among private direction estimation, private frame
-#' construction, and private histogram release.
+#' The `score` epsilon allocation is split 35% for the private frame and 65%
+#' for the histogram; all score delta goes to the histogram. The frame epsilon
+#' is divided equally among two private medians and one radial quantile.
+#' Directions and frame are shared across methods. Each requested histogram
+#' method receives the full histogram allocation, so jointly releasing `"add"`
+#' and `"sparse"` requires composition across methods.
 #'
-#' For a detailed procedure and mathematical formulations,
-#' refer \url{https://yejinjo0220.github.io/dppca/articles/dp_score}.
+#' For grouped data, the partition and labels are assumed public and fixed;
+#' groups share directions, frame and grid. Parallel composition applies to
+#' disjoint group histograms under this assumption, while different methods
+#' still require composition. `non_private = FALSE` does not privatize group
+#' membership. Input dimensions, feature schema, bins, and tuning choices are
+#' assumed public. Repeated releases also require composition.
 #'
-#' @return A list with components:
-#' \describe{
-#'   \item{score}{An \eqn{n \times 2} matrix containing the PC scores for the
-#'     two selected axes.}
-#'   \item{frame}{A list with components `xlim` and `ylim`.}
-#'   \item{none}{Data frame for the non-private empirical histogram.}
-#'   \item{add}{Data frame for the additive Gaussian private histogram, or
-#'   `NULL` if not requested.}
-#'   \item{sparse}{Data frame for the sparse private histogram, or `NULL` if
-#'   not requested.}
-#'   \item{method}{Character vector of private histogram methods used.}
-#' }
+#' The optional ordinary PCA reference uses sample-mean-centered scores and a
+#' zero-centered comparison frame. It is not differentially private. See
+#' [dp_loading()] for direction-estimation and Gaussian calibration conditions.
+#'
+#' @return A `dp_score` object containing the private `frame` and requested
+#'   histogram methods (`add` and/or `sparse`), or `groups` for grouped fits.
+#'   Each histogram has `xmin`, `xmax`, `ymin`, `ymax` and `prob` columns.
+#'   `nonprivate` is `NULL` by default; when requested it contains `scores`,
+#'   `frame` and the empirical `histogram` (or group histograms under `groups`).
+#'   `metadata` contains data dimensions, axes, bins, methods and privacy settings.
+#'   Use `summary()` and `plot()` to inspect or visualize stored results.
 #'
 #' @seealso
-#' [dp_score_plot()] for plotting the output of this function.
-#' [dp_score_group()] and [dp_score_plot_group()] for group-wise score
-#' histograms.
-#' [dp_pc_dir()] for private principal component direction estimation.
+#' [plot.dp_score()] for plotting stored results without new private estimates.
+#' [dp_pca()] and [plot.dp_pca()] for estimation followed by plots of a stored fit.
+#' [plot.dp_score_group()] for displaying a grouped result.
+#' [dp_loading()] for private principal component direction estimation.
 #'
 #' @references
 #' \insertRef{dwork2014algorithmic}{dppca}
 #'
-#' \insertRef{nissim2007smooth}{dppca}
+#' \insertRef{durfee2023unbounded}{dppca}
 #'
 #' \insertRef{wasserman2010statistical}{dppca}
 #'
@@ -115,563 +117,436 @@
 #' # Use a small subset to keep the example fast.
 #' X <- gau[1:300, ]
 #'
-#' # Compute private two-dimensional PCA scores using the additive histogram method.
+#' # Release a private histogram with fixed preprocessing and no raw scores.
 #' set.seed(123)
 #' score_gau <- dp_score(
 #'   X,
-#'   eps = 2,
-#'   delta = 1e-3,
+#'   privacy = privacy_control(eps = 1.8, delta = 1e-3),
 #'   method = "add",
-#'   bins = c(10, 10)
+#'   bins = c(10, 10),
+#'   non_private = FALSE
 #' )
 #'
-#' head(score_gau$score)
+#' score_gau$frame
 #' head(score_gau$add)
+#' summary(score_gau)
+#' # plot(score_gau, type = "histogram")
+#' # To use a group column: dp_score(X, privacy, bins, group = "region")
 #'
 #' @importFrom VGAM rlaplace
 #' @export
 dp_score <- function(
     X,
-    eps,
-    delta,
+    privacy,
     bins,
     method = c("add", "sparse"),
-    center = TRUE,
-    standardize = FALSE,
-    g_dppca = FALSE,
-    cpp.option = FALSE,
-    axes = c(1, 2)
-) {
-  X <- validate_score_matrix(X)
-  validate_score_common(
-    X = X,
-    eps = eps,
-    delta = delta,
-    bins = bins,
-    center = center,
-    standardize = standardize,
-    g_dppca = g_dppca,
-    cpp.option = cpp.option,
-    axes = axes
-  )
-
-  axes <- as.integer(axes)
-  bins <- as.integer(bins)
-  m_x <- bins[1]
-  m_y <- bins[2]
-  method <- match.arg(method, choices = c("add", "sparse"), several.ok = TRUE)
-
-  budget <- split_score_privacy_budget(
-    eps = eps,
-    delta = delta,
-    g_dppca = g_dppca
-  )
-
-  score_res <- compute_score_coordinates(
-    X = X,
-    axes = axes,
-    center = center,
-    standardize = standardize,
-    g_dppca = g_dppca,
-    cpp.option = cpp.option,
-    eps_pc = budget$eps_pc,
-    delta_pc = budget$delta_pc
-  )
-
-  frame_out <- dp_frame(
-    X = score_res$score,
-    eps_frame = budget$eps_frame,
-    delta_frame = budget$delta_frame,
-    inflate = 0.20
-  )
-
-  hist <- score_histograms(
-    X_score = score_res$score,
-    xlim = frame_out$xlim,
-    ylim = frame_out$ylim,
-    bins = bins,
-    eps_hist = budget$eps_hist,
-    delta_hist = budget$delta_hist,
-    method = method
-  )
-
-  list(
-    score = score_res$score,
-    frame = frame_out,
-    none = hist$none,
-    add = hist$add,
-    sparse = hist$sparse,
-    method = method
-  )
-}
-
-#' Plot differentially private score histograms
-#'
-#' This function computes and visualizes two-dimensional principal component
-#' score histograms, including the original scatter plot, the non-private
-#' empirical histogram, and one or more differentially private histogram
-#' estimates. It is a plotting wrapper around [dp_score()] and returns both the
-#' computed score output and `ggplot` objects.
-#'
-#' @inheritParams dp_score
-#'
-#' @return A list with components:
-#' \describe{
-#'   \item{score}{The output of [dp_score()].}
-#'   \item{plot}{A list containing the scatter plot, histogram panels, and the
-#'   combined patchwork plot.}
-#' }
-#'
-#' @seealso
-#' [dp_score()] for computing score histograms without plotting.
-#' [dp_score_plot_group()] for group-wise score histogram plots.
-#'
-#' @examples
-#' data(gau, package = "dppca")
-#'
-#' # Use a small subset to keep the example fast.
-#' X <- gau[1:300, ]
-#'
-#' # Draw a private score plot using the additive histogram method.
-#' set.seed(123)
-#' score_plot <- dp_score_plot(
-#'   X,
-#'   eps = 3,
-#'   delta = 1e-3,
-#'   bins = c(8, 8),
-#'   method = "add"
-#' )
-#' score_plot$plot$add
-#'
-#' # Draw score plots for all available histogram methods.
-#' set.seed(123)
-#' score_plot <- dp_score_plot(
-#'   X,
-#'   eps = 3,
-#'   delta = 1e-3,
-#'   bins = c(8, 8)
-#' )
-#' score_plot$plot$all
-#'
-#' @export
-dp_score_plot <- function(
-    X,
-    eps,
-    delta,
-    bins,
-    method = c("add", "sparse"),
-    center = TRUE,
-    standardize = FALSE,
-    g_dppca = FALSE,
-    cpp.option = FALSE,
-    axes = c(1, 2)
-) {
-  method <- match.arg(method, choices = c("add", "sparse"), several.ok = TRUE)
-  color <- "#6A5ACD"
-
-  score_res <- dp_score(
-    X = X,
-    eps = eps,
-    delta = delta,
-    bins = bins,
-    center = center,
-    standardize = standardize,
-    g_dppca = g_dppca,
-    cpp.option = cpp.option,
-    axes = axes,
-    method = method
-  )
-
-  X_score <- as.data.frame(score_res$score)
-  colnames(X_score) <- c("pc_x", "pc_y")
-
-  xlim <- score_res$frame$xlim
-  ylim <- score_res$frame$ylim
-  pc_names <- colnames(score_res$score)
-
-  p_scatter <- ggplot2::ggplot(
-    X_score,
-    ggplot2::aes(x = .data$pc_x, y = .data$pc_y)
-  ) +
-    ggplot2::geom_point(alpha = 0.6, size = 1.8, color = color) +
-    ggplot2::coord_fixed(xlim = xlim, ylim = ylim) +
-    ggplot2::scale_x_continuous(expand = c(0, 0), breaks = pretty(xlim, n = 5)) +
-    ggplot2::scale_y_continuous(expand = c(0, 0), breaks = pretty(ylim, n = 5)) +
-    theme_dp_base() +
-    ggplot2::labs(x = pc_names[1], y = pc_names[2])
-
-  p_scatter <- add_title_dp(p_scatter, "Original Scatter")
-  p_none <- make_hist_plot_dp(score_res$none, xlim, ylim, color, "Original Hist",
-                              xlab = pc_names[1], ylab = pc_names[2])
-  p_add <- NULL
-  p_sparse <- NULL
-
-  plot_panels <- list(p_scatter, p_none)
-
-  if ("add" %in% method) {
-    p_add <- make_hist_plot_dp(score_res$add, xlim, ylim, color, "Add DP Hist",
-                               xlab = pc_names[1], ylab = pc_names[2])
-    plot_panels <- c(plot_panels, list(p_add))
-  }
-
-  if ("sparse" %in% method) {
-    p_sparse <- make_hist_plot_dp(score_res$sparse, xlim, ylim, color, "Sparse DP Hist",
-                                  xlab = pc_names[1], ylab = pc_names[2])
-    plot_panels <- c(plot_panels, list(p_sparse))
-  }
-
-  p_all <- patchwork::wrap_plots(plot_panels, nrow = 1)
-
-  list(
-    score = score_res,
-    plot = list(
-      scatter = p_scatter,
-      none = p_none,
-      add = p_add,
-      sparse = p_sparse,
-      all = p_all
-    )
-  )
-}
-
-#' Group-wise differentially private score histograms
-#'
-#' This function computes two-dimensional principal component scores and releases
-#' group-wise differentially private histograms on a common score frame and grid.
-#' It is useful when observations have group labels and the low-dimensional score
-#' distribution should be compared across groups.
-#'
-#' @inheritParams dp_score
-#' @param X A matrix or data frame where rows correspond to observations
-#'   and columns correspond to variables.
-#'   `X` can additionally include a named column representing the group label
-#'   for each observation.
-#' @param group Group labels. This can be a vector of length `nrow(X)` or a
-#'   single column name in `X`. If a column name is supplied, that column is
-#'   used as the group label and removed from the feature matrix.
-#'
-#' @details
-#' The score directions, plotting frame, and histogram grid are shared across all
-#' groups. For each group \eqn{g}, the group-specific count in bin \eqn{B_k} is
-#' \eqn{c_k^{(g)} = \sum_i 1\{s_i \in B_k, g_i = g\}}. Private histograms are
-#' then computed separately for each group on the common grid. Because the groups
-#' form a partition of the rows, the group-wise histograms use the same histogram
-#' privacy parameters for each group by parallel composition.
-#'
-#' @return A list with components:
-#' \describe{
-#'   \item{score}{An \eqn{n \times 2} matrix containing the PC scores for the
-#'     two selected axes.}
-#'   \item{frame}{A list with components `xlim` and `ylim`.}
-#'   \item{groups}{A named list of group-specific histogram outputs.}
-#'   \item{method}{Character vector of private histogram methods used.}
-#' }
-#'
-#' @seealso
-#' [dp_score_plot_group()] for plotting group-wise score histograms.
-#' [dp_score()] for pooled score histograms.
-#'
-#' @examples
-#' data(gau_g, package = "dppca")
-#'
-#' # Compute private grouped PCA scores.
-#' set.seed(123)
-#' score_gau_g <- dp_score_group(
-#'   gau_g,
-#'   group = "group",
-#'   eps = 3,
-#'   delta = 1e-3,
-#'   bins = c(8, 8)
-#' )
-#'
-#' head(score_gau_g$score)
-#' head(score_gau_g$groups$group1$add)
-#'
-#' @importFrom VGAM rlaplace
-#' @export
-dp_score_group <- function(
-    X,
-    group,
-    eps,
-    delta,
-    bins,
-    method = c("add", "sparse"),
-    center = TRUE,
-    standardize = FALSE,
-    g_dppca = FALSE,
-    cpp.option = FALSE,
-    axes = c(1, 2)
-) {
-  method <- match.arg(method, choices = c("add", "sparse"), several.ok = TRUE)
-
-  group_data <- split_group_input(X, group)
-  X_mat <- validate_score_matrix(group_data$X)
-  group_vec <- group_data$group
-
-  if (length(group_vec) != nrow(X_mat)) {
-    stop("`group` must have length equal to `nrow(X)`.", call. = FALSE)
-  }
-  if (anyNA(group_vec)) {
-    stop("`group` must not contain missing values.", call. = FALSE)
-  }
-
-  validate_score_common(
-    X = X_mat,
-    eps = eps,
-    delta = delta,
-    bins = bins,
-    center = center,
-    standardize = standardize,
-    g_dppca = g_dppca,
-    cpp.option = cpp.option,
-    axes = axes
-  )
-
-  axes <- as.integer(axes)
-  bins <- as.integer(bins)
-  m_x <- bins[1]
-  m_y <- bins[2]
-  g_levels <- as.character(unique(group_vec))
-
-  budget <- split_score_privacy_budget(
-    eps = eps,
-    delta = delta,
-    g_dppca = g_dppca
-  )
-
-  score_res <- compute_score_coordinates(
-    X = X_mat,
-    axes = axes,
-    center = center,
-    standardize = standardize,
-    g_dppca = g_dppca,
-    cpp.option = cpp.option,
-    eps_pc = budget$eps_pc,
-    delta_pc = budget$delta_pc
-  )
-
-  frame_out <- dp_frame(
-    X = score_res$score,
-    eps_frame = budget$eps_frame,
-    delta_frame = budget$delta_frame,
-    inflate = 0.20
-  )
-
-  grid <- score_histogram_grid(
-    xlim = frame_out$xlim,
-    ylim = frame_out$ylim,
-    m_x = m_x,
-    m_y = m_y
-  )
-
-  eps_hist_method <- budget$eps_hist / length(method)
-  delta_hist_method <- budget$delta_hist / length(method)
-  groups_out <- list()
-
-  for (g in g_levels) {
-    idx_g <- which(as.character(group_vec) == g)
-    Xg <- score_res$score[idx_g, , drop = FALSE]
-    n_g <- nrow(Xg)
-
-    hist <- score_histograms_from_grid(
-      X_score = Xg,
-      grid = grid,
-      eps_hist_method = eps_hist_method,
-      delta_hist_method = delta_hist_method,
-      method = method,
-      group_name = g
-    )
-
-    groups_out[[g]] <- list(
-      n = n_g,
-      none = hist$none,
-      add = hist$add,
-      sparse = hist$sparse
-    )
-  }
-
-  list(
-    score = score_res$score,
-    frame = frame_out,
-    groups = groups_out,
-    method = method
-  )
-}
-
-#' Plot group-wise differentially private score histograms
-#'
-#' This function computes and visualizes group-wise differentially private score
-#' histograms. It is a plotting wrapper around [dp_score_group()] and returns
-#' both the computed group-wise score output and `ggplot` objects.
-#'
-#' @inheritParams dp_score_group
-#'
-#' @return A list with components:
-#' \describe{
-#'   \item{score}{The output of [dp_score_group()].}
-#'   \item{plot}{A list containing group-wise histogram plots.}
-#'   \item{group_colors}{Named vector of colors used for the groups.}
-#' }
-#'
-#' @seealso
-#' [dp_score_group()] for computing group-wise score histograms without
-#' plotting.
-#' [dp_score_plot()] for pooled score histogram plots.
-#'
-#' @examples
-#' data(gau_g, package = "dppca")
-#'
-#' # Draw a private grouped score plot.
-#' set.seed(123)
-#' score_plot_gau_g <- dp_score_plot_group(
-#'   gau_g,
-#'   group = "group",
-#'   eps = 3,
-#'   delta = 1e-3,
-#'   bins = c(8, 8)
-#' )
-#'
-#' score_plot_gau_g$plot$all
-#'
-#' @export
-dp_score_plot_group <- function(
-    X,
-    group,
-    eps,
-    delta,
-    bins,
-    center = TRUE,
-    standardize = FALSE,
-    g_dppca = FALSE,
-    cpp.option = FALSE,
+    cpp.option = TRUE,
     axes = c(1, 2),
-    method = c("add", "sparse")
+    V_dp = NULL,
+    non_private = FALSE,
+    group = NULL
 ) {
-  method <- match.arg(method, choices = c("add", "sparse"), several.ok = TRUE)
+  validate_logical_value(non_private, "non_private")
+  privacy <- .validate_privacy_control(privacy, c("loading", "score"))
+  input <- .prepare_pca_input(X, group = group, min_cols = 2L)
+  X <- input$X
+  validate_score_common(X, bins, cpp.option, axes)
 
-  group_data <- split_group_input(X, group)
-  group_vec <- group_data$group
-  X_feat <- group_data$X
-  g_levels <- as.character(unique(group_vec))
+  axes <- as.integer(axes)
+  bins <- as.integer(bins)
+  method <- unique(match.arg(method, c("add", "sparse"), several.ok = TRUE))
+  budget <- split_score_privacy_budget(privacy)
 
-  if (.is_color_vec(g_levels)) {
-    col_map <- stats::setNames(as.character(g_levels), g_levels)
-  } else {
-    pal <- grDevices::hcl.colors(length(g_levels), "Dark3")
-    col_map <- stats::setNames(pal, g_levels)
-  }
-
-  score_res <- dp_score_group(
-    X = X_feat,
-    group = group_vec,
-    eps = eps,
-    delta = delta,
-    bins = bins,
-    center = center,
-    standardize = standardize,
-    g_dppca = g_dppca,
-    cpp.option = cpp.option,
-    axes = axes,
-    method = method
+  # Estimate directions and the frame once, whether or not groups are used.
+  score_res <- compute_score_coordinates(
+    X = X, axes = axes, cpp.option = cpp.option,
+    eps_pc = budget$eps_pc, delta_pc = budget$delta_pc, V_dp = V_dp
+  )
+  frame_out <- dp_frame(
+    X = score_res$score, eps_frame = budget$eps_frame, inflate = 0.20
   )
 
-  X_score <- as.data.frame(score_res$score)
-  colnames(X_score) <- c("pc_x", "pc_y")
-  X_score$group <- as.character(group_vec)
-
-  xlim <- score_res$frame$xlim
-  ylim <- score_res$frame$ylim
-  pc_names <- colnames(score_res$score)
-
-  p_scatter <- ggplot2::ggplot(
-    X_score,
-    ggplot2::aes(x = .data$pc_x, y = .data$pc_y, colour = .data$group)
-  ) +
-    ggplot2::geom_point(alpha = 0.6, size = 1.8) +
-    ggplot2::scale_colour_manual(values = col_map) +
-    ggplot2::coord_fixed(xlim = xlim, ylim = ylim) +
-    ggplot2::scale_x_continuous(expand = c(0, 0), breaks = pretty(xlim, n = 5)) +
-    ggplot2::scale_y_continuous(expand = c(0, 0), breaks = pretty(ylim, n = 5)) +
-    theme_dp_base() +
-    ggplot2::labs(x = pc_names[1], y = pc_names[2])
-
-  p_scatter <- add_title_dp(p_scatter, "Original Scatter")
-
-  coord_none_all <- dplyr::bind_rows(lapply(names(score_res$groups), function(g) {
-    df <- score_res$groups[[g]]$none
-    df$group <- g
-    df
-  }))
-
-  p_none_all <- make_hist_all_dp(coord_none_all, xlim, ylim, col_map, "Original Hist",
-                                 xlab = pc_names[1], ylab = pc_names[2])
-  p_add_all <- NULL
-  p_sparse_all <- NULL
-
-  plot_panels <- list(p_scatter, p_none_all)
-
-  if ("add" %in% method) {
-    coord_add_all <- dplyr::bind_rows(lapply(names(score_res$groups), function(g) {
-      df <- score_res$groups[[g]]$add
-      df$group <- g
-      df
-    }))
-    p_add_all <- make_hist_all_dp(coord_add_all, xlim, ylim, col_map, "Add DP Hist",
-                                  xlab = pc_names[1], ylab = pc_names[2])
-    plot_panels <- c(plot_panels, list(p_add_all))
+  # Private histogram estimates always use the private projected scores.
+  if (is.null(input$group)) {
+    hist <- score_histograms(
+      X_score = score_res$score,
+      xlim = frame_out$xlim, ylim = frame_out$ylim, bins = bins,
+      eps_hist = budget$eps_hist, delta_hist = budget$delta_hist,
+      method = method, non_private = FALSE
+    )
+    out <- c(list(frame = frame_out), hist)
+  } else {
+    groups <- .score_group_histograms(
+      scores = score_res$score, group = input$group,
+      frame = frame_out, bins = bins,
+      eps_hist = budget$eps_hist, delta_hist = budget$delta_hist,
+      method = method, non_private = FALSE
+    )
+    out <- list(frame = frame_out, groups = groups)
   }
 
-  if ("sparse" %in% method) {
-    coord_sparse_all <- dplyr::bind_rows(lapply(names(score_res$groups), function(g) {
-      df <- score_res$groups[[g]]$sparse
-      df$group <- g
-      df
-    }))
-    p_sparse_all <- make_hist_all_dp(coord_sparse_all, xlim, ylim, col_map, "Sparse DP Hist",
-                                     xlab = pc_names[1], ylab = pc_names[2])
-    plot_panels <- c(plot_panels, list(p_sparse_all))
-  }
+  nonprivate <- NULL
+  if (non_private) {
+    # Ordinary PCA reference, sign-aligned for comparison with private axes.
+    V_np <- .nonprivate_pca(X)$directions[, axes, drop = FALSE]
+    signs <- ifelse(colSums(V_np * score_res$directions) < 0, -1, 1)
+    V_np <- sweep(V_np, 2L, signs, "*")
+    X_centered <- sweep(X, 2L, colMeans(X), "-")
+    ordinary_scores <- X_centered %*% V_np
+    colnames(ordinary_scores) <- paste0("PC", axes)
 
-  p_all <- patchwork::wrap_plots(plot_panels, nrow = 1)
-
-  make_group_layout <- function(which = c("none", "add", "sparse"), title_prefix) {
-    which <- match.arg(which)
-
-    group_plots <- lapply(g_levels, function(g) {
-      df_g <- score_res$groups[[g]][[which]]
-      title_g <- if (.is_color_vec(g_levels)) NULL else paste0(title_prefix, g)
-
-      make_hist_single_dp(
-        df_g,
-        xlim = xlim,
-        ylim = ylim,
-        col = col_map[[g]],
-        title = title_g,
-        xlab = pc_names[1],
-        ylab = pc_names[2]
+    # Same bin widths as private, but centered on zero for ordinary PCA.
+    ordinary_frame <- .dppca_centered_frame(frame_out)
+    nonprivate <- list(scores = ordinary_scores, frame = ordinary_frame)
+    if (is.null(input$group)) {
+      nonprivate$histogram <- .dppca_reference_histogram(
+        ordinary_scores, ordinary_frame, bins
       )
-    })
-    names(group_plots) <- g_levels
+    } else {
+      nonprivate$groups <- lapply(names(out$groups), function(g) {
+        rows <- input$group == g
+        list(
+          n = sum(rows),
+          histogram = .dppca_reference_histogram(
+            ordinary_scores[rows, , drop = FALSE], ordinary_frame, bins
+          )
+        )
+      })
+      names(nonprivate$groups) <- names(out$groups)
+    }
+  }
 
-    list(
-      all = patchwork::wrap_plots(group_plots, ncol = 3),
-      groups = group_plots
+  out["nonprivate"] <- list(nonprivate)
+  metadata <- list(
+    n = nrow(X), p = ncol(X), axes = axes, bins = bins, methods = method,
+    privacy = privacy, group_name = input$group_name,
+    group_levels = input$group_levels,
+    excluded_columns = input$excluded_columns
+  )
+  if (non_private && !is.null(input$group)) {
+    metadata$group <- input$group
+  }
+  out$metadata <- metadata
+  class(out) <- if (is.null(input$group)) {
+    c("dp_score", "list")
+  } else {
+    c("dp_score_group", "dp_score", "list")
+  }
+  out
+}
+
+# Internal compatibility view for the existing score plotting/summary helpers.
+# Public dp_score() fits keep only the new, organized return structure.
+.score_legacy_view <- function(x) {
+  out <- x
+  out$metadata <- NULL
+  if (is.null(x$nonprivate)) {
+    out$nonprivate <- NULL
+  } else {
+    out$score <- x$nonprivate$scores
+    out$nonprivate_frame <- x$nonprivate$frame
+    if (is.null(x$groups)) {
+      out$nonprivate <- x$nonprivate$histogram
+    } else {
+      for (g in names(out$groups)) {
+        out$groups[[g]]$n <- x$nonprivate$groups[[g]]$n
+        out$groups[[g]]$nonprivate <- x$nonprivate$groups[[g]]$histogram
+      }
+      out$nonprivate <- NULL
+    }
+  }
+  legacy_metadata <- x$metadata
+  legacy_metadata$method <- legacy_metadata$methods
+  attr(out, "metadata") <- legacy_metadata
+  out
+}
+
+#' Plot a stored private score histogram
+#'
+#' Reuses the stored frame and histograms. Synthetic sampling is post-processing;
+#' no direction, frame or histogram mechanism is run again.
+#'
+#' @param x A fitted [dp_score()] object.
+#' @param type `"histogram"`, `"sample"`, or both (`c("histogram", "sample")`
+#'   by default). Samples are synthetic for DP histograms; ordinary-reference
+#'   sample plots show centered observed scores unless an explicit
+#'   `sample_size` is requested.
+#' @param sampling_control Optional [sampling_control()] object used for
+#'   `"sample"`; `NULL` uses defaults.
+#' @param plot_control Optional [score_plot_control()] appearance settings;
+#'   `NULL` uses defaults.
+#' @param center Whether to shift displayed private coordinates by the midpoint
+#'   of the private frame (`TRUE` by default). Ordinary reference coordinates
+#'   remain centered at zero. This changes only the display.
+#' @param ... Unused arguments are rejected.
+#' @details
+#' Non-private reference panels appear automatically when retained at
+#' fitting. Combined grouped displays show one legend per histogram method;
+#' individual plots retain their legends. Groups with no sampled points are
+#' omitted from sampled-point legends.
+#'
+#' @return Invisibly returns a `dp_score_plot` object with `score`, optional
+#'   `sample`, and `plot` components, while displaying `plot$all`.
+#' @examples
+#' # After estimating once:
+#' # summary(score_fit)
+#' # plots <- plot(score_fit, type = "histogram")
+#' # plot(score_fit, type = "sample",
+#' #      sampling_control = sampling_control(sample_size = 500))
+#' @export
+plot.dp_score <- function(
+    x,
+    type = c("histogram", "sample"),
+    sampling_control = NULL,
+    plot_control = NULL,
+    center = TRUE,
+    ...
+) {
+  validate_logical_value(center, "center")
+  if (length(list(...))) {
+    stop(
+      "Unused arguments in `...`; use `type`, `sampling_control`, ",
+      "`plot_control` or `center`.",
+      call. = FALSE
     )
   }
-
-  none_layout <- make_group_layout("none", "Original Hist: ")
-  add_layout <- if ("add" %in% method) make_group_layout("add", "Add DP Hist: ") else NULL
-  sparse_layout <- if ("sparse" %in% method) make_group_layout("sparse", "Sparse DP Hist: ") else NULL
-
-  list(
-    score = score_res,
-    plot = list(
-      scatter = p_scatter,
-      none = none_layout,
-      add = add_layout,
-      sparse = sparse_layout,
-      all = p_all
-    ),
-    group_colors = col_map
+  non_private <- !is.null(x$nonprivate)
+  out <- .render_dp_score(
+    .score_legacy_view(x), type, sampling_control, plot_control, non_private,
+    center = center
   )
+  out$score <- x
+  print(out$plot$all)
+  invisible(out)
+}
+
+#' Plot stored group-wise private score histograms
+#'
+#' Uses the same display options as [plot.dp_score()]. Group sample sizes
+#' follow observed proportions if non-private counts were retained; otherwise
+#' they are allocated equally across public group labels.
+#'
+#' @param x A grouped result from [dp_score()] with `group` supplied.
+#' @inheritParams plot.dp_score
+#' @return Invisibly returns a `dp_score_plot_group` object while displaying
+#'   `plot$all`.
+#' @export
+plot.dp_score_group <- function(
+    x,
+    type = c("histogram", "sample"),
+    sampling_control = NULL,
+    plot_control = NULL,
+    center = TRUE,
+    ...
+) {
+  validate_logical_value(center, "center")
+  if (length(list(...))) {
+    stop(
+      "Unused arguments in `...`; use `type`, `sampling_control`, ",
+      "`plot_control` or `center`.",
+      call. = FALSE
+    )
+  }
+  non_private <- !is.null(x$nonprivate)
+  out <- .render_dp_score(
+    .score_legacy_view(x), type, sampling_control, plot_control, non_private,
+    center = center
+  )
+  out$score <- x
+  print(out$plot$all)
+  invisible(out)
+}
+
+#' Summarize stored score histograms
+#'
+#' @param object A result from [dp_score()], with or without `group`.
+#' @param ... Reserved for future arguments.
+#' @return A summary containing the public sample size, axes, grid, private
+#'   frame (including its center), allocated privacy budget and a table of
+#'   positive-bin counts and probability sums. No data-dependent private
+#'   mechanisms are run.
+#' @rdname dp_score
+#' @export
+summary.dp_score <- function(object, ...) {
+  .score_display_summary(object)
+}
+
+#' @rdname dp_score
+#' @export
+summary.dp_score_group <- function(object, ...) {
+  .score_display_summary(object, grouped = TRUE)
+}
+
+# Add display metadata without changing the histogram-summary helper.
+.score_display_summary <- function(object, grouped = FALSE) {
+  out <- .score_summary(.score_legacy_view(object), grouped = grouped)
+  metadata <- object$metadata
+  out$p <- metadata$p
+  out$methods <- metadata$methods
+  budget <- split_score_privacy_budget(metadata$privacy)
+  out$budget <- rbind(
+    Loading = c(eps = budget$eps_pc, delta = budget$delta_pc),
+    `Score frame` = c(eps = budget$eps_frame, delta = 0),
+    `Score histogram` = c(eps = budget$eps_hist, delta = budget$delta_hist),
+    Total = metadata$privacy$total
+  )
+  out
+}
+
+#' Print a score-histogram summary
+#'
+#' @param x A score-histogram summary.
+#' @param digits Number of significant digits shown in tables.
+#' @param ... Passed to table printing.
+#' @return Invisibly returns `x`.
+#' @rdname dp_score
+#' @export
+print.summary.dp_score <- function(x, digits = 4, ...) {
+  cat("DP Score Histograms Summary\n")
+  cat("Data:", x$n, "observations x", x$p, "variables\n")
+  cat("Score axes:", paste0("PC", x$axes, collapse = ", "), "\n")
+  cat("Grid:", paste(x$bins, collapse = " x "), "\n")
+  cat("Methods: score =", paste(x$methods, collapse = ", "), "\n")
+  if (!is.null(x$group_name)) {
+    cat("Group variable:", x$group_name, "\n")
+    cat("Groups:", paste(x$group_levels, collapse = ", "), "\n")
+  }
+  if (length(x$excluded_columns)) {
+    cat("Excluded columns:", paste(x$excluded_columns, collapse = ", "), "\n")
+  }
+
+  frame <- data.frame(
+    Axis = paste0("PC", x$axes),
+    Center = c(mean(x$frame$xlim), mean(x$frame$ylim)),
+    Lower = c(x$frame$xlim[1L], x$frame$ylim[1L]),
+    Upper = c(x$frame$xlim[2L], x$frame$ylim[2L])
+  )
+  cat("\nPrivate frame:\n")
+  print(frame, digits = digits, row.names = FALSE, ...)
+
+  histograms <- x$histograms
+  names(histograms) <- c(
+    group = "Group", method = "Method", bins = "Bins",
+    positive_bins = "Positive bins", probability_sum = "Probability sum"
+  )[names(histograms)]
+  cat("\nHistogram summary:\n")
+  print(histograms, digits = digits, row.names = FALSE, ...)
+
+  cat("\nAllocated privacy budget",
+      if (length(x$methods) > 1L) " (per histogram method)" else "",
+      ":\n", sep = "")
+  print(x$budget, digits = digits, ...)
+  if (length(x$methods) > 1L) {
+    cat("\nAll histogram methods use the same private PC directions and frame.\n")
+  }
+  cat("\nNon-private reference:",
+      if (x$non_private) "included" else "not stored", "\n")
+  if (!is.null(x$samples)) {
+    cat("\nStored synthetic points:\n")
+    print(x$samples, digits = digits, row.names = FALSE, ...)
+  }
+  invisible(x)
+}
+
+#' Print stored score histogram results
+#'
+#' @param x A result from [dp_score()], with or without `group`.
+#' @param ... Reserved for S3 generic compatibility.
+#' @return Invisibly returns `x`.
+#' @rdname dp_score
+#' @export
+print.dp_score <- function(x, ...) {
+  s <- summary(x)
+  cat("Differentially Private Score Histograms\n")
+  cat("Data:", s$n, "observations x", s$p, "variables\n")
+  cat("Score axes:", paste0("PC", s$axes, collapse = ", "), "\n")
+  cat("Grid:", paste(s$bins, collapse = " x "), "\n")
+  cat("Methods: score =", paste(s$methods, collapse = ", "), "\n")
+  if (!is.null(s$group_name)) {
+    cat("Group variable:", s$group_name, "\n")
+    cat("Groups:", paste(s$group_levels, collapse = ", "), "\n")
+  }
+  budget <- s$privacy$total
+  cat("Total privacy budget",
+      if (length(s$methods) > 1L) " (per histogram method)" else "",
+      ": eps = ", format(budget[["eps"]], digits = 6),
+      "; delta = ", format(budget[["delta"]], digits = 6), "\n", sep = "")
+  cat("Non-private reference:",
+      if (s$non_private) "included" else "not stored", "\n")
+  invisible(x)
+}
+
+#' @rdname dp_score
+#' @export
+print.dp_score_group <- function(x, ...) {
+  print.dp_score(x, ...)
+}
+
+#' Redraw a stored score comparison plot
+#'
+#' @param x A plotting result returned by [plot.dp_score()] or
+#'   [plot.dp_score_group()].
+#' @param ... Optional arguments for [plot.dp_score()] or
+#'   [plot.dp_score_group()]. With no arguments, the stored layout is redrawn.
+#'   Explicit controls rebuild the display from stored estimates; sampled
+#'   displays may generate new synthetic points, with no new private estimates.
+#' @return Invisibly returns the original or rebuilt comparison result.
+#' @rdname plot.dp_score
+#' @export
+plot.dp_score_plot <- function(x, ...) {
+  if (length(list(...))) {
+    return(plot(x$score, ...))
+  }
+  print(x$plot$all)
+  invisible(x)
+}
+
+#' @rdname plot.dp_score_group
+#' @export
+plot.dp_score_plot_group <- function(x, ...) {
+  if (length(list(...))) {
+    return(plot(x$score, ...))
+  }
+  print(x$plot$all)
+  invisible(x)
+}
+
+#' Summarize stored score comparison plots
+#'
+#' @param object A plotting result returned by [plot.dp_score()] or
+#'   [plot.dp_score_group()].
+#' @param ... Reserved for future arguments.
+#' @return A score-histogram summary with stored synthetic point counts.
+#' @rdname plot.dp_score
+#' @export
+summary.dp_score_plot <- function(object, ...) {
+  object$score <- .score_legacy_view(object$score)
+  .score_plot_summary(object)
+}
+
+#' @rdname plot.dp_score_group
+#' @export
+summary.dp_score_plot_group <- function(object, ...) {
+  object$score <- .score_legacy_view(object$score)
+  .score_plot_summary(object)
+}
+
+#' Print stored score comparison results
+#'
+#' @param x A plotting result returned by [plot.dp_score()] or
+#'   [plot.dp_score_group()].
+#' @param ... Passed to the summary print method.
+#' @return Invisibly returns `x`.
+#' @rdname plot.dp_score
+#' @export
+print.dp_score_plot <- function(x, ...) {
+  print(summary(x), ...)
+  invisible(x)
+}
+
+#' @rdname plot.dp_score_group
+#' @export
+print.dp_score_plot_group <- function(x, ...) {
+  print(summary(x), ...)
+  invisible(x)
 }

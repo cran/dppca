@@ -7,29 +7,45 @@
 dppca_app(X = NULL, group = NULL)
 }
 \arguments{
-\item{X}{Optional numeric matrix or data frame. If supplied, the app opens
-with this data as the initial dataset.}
+\item{X}{A numeric matrix or data frame with observations in rows and variables
+in columns. Non-numeric data-frame columns are excluded with a warning;
+numeric values must be finite. Input is not automatically centered or
+standardized. If provided, the app uses this dataset initially. At least
+two observations and two numeric features are required.}
 
-\item{group}{Optional group labels. This can be either a vector of length
-\code{nrow(X)} or a single column name in \code{X}.}
+\item{group}{Optional group column name in \code{X} or vector of group labels
+(\code{NULL} by default). A selected group column is excluded from PCA
+features, even when numeric; group labels and membership are assumed
+public. Only used with supplied \code{X}; activate grouping
+in the PCA or Score tab to use these labels.}
 }
 \value{
-No return value. This function opens a Shiny application.
+Invisibly returns the value produced by \code{shiny::runApp()} after
+the application exits.
 }
 \description{
-Launches an interactive Shiny application for exploring differentially
-private PCA visualizations. The app provides a graphical interface for
-\code{dp_scree_plot()} and \code{dp_score_plot()}, including private scree
-plot methods and histogram-based private score plot methods.
+Launches an interactive 'shiny' application for exploring differentially
+private PCA visualizations. The PCA tab uses \code{\link[=dp_pca]{dp_pca()}} for integrated
+estimation, summaries, and scree, score, loading, variable, and biplot
+displays, including grouped score plots when grouping is enabled.
+The Loading, Scree, and Score tabs provide standalone analyses, including
+method comparisons and grouped score plots.
 }
 \details{
-The app can be opened with built-in example datasets or with a user-supplied
-dataset. If \code{X} is supplied, the app starts with \code{X} as the initial
-dataset. If \code{group} is supplied, the score plot can use the group labels
-for coloring. The \code{group} argument can be either a vector of length
-\code{nrow(X)} or the name of a column in \code{X}. When \code{group} is a
-column name, that column is used as group labels and is removed from the PCA
-feature matrix.
+The app accepts built-in data, supplied \code{X}, or uploaded CSV files.
+Grouping is available for PCA and Score analyses; a selected group column is
+excluded from numeric PCA features. Loading and Scree analyses use all
+numeric feature columns.
+
+Running an analysis stores its estimates for subsequent plotting. Display
+settings can redraw an existing fit without consuming another privacy budget.
+Non-private reference output is optional in the app and is not a private
+release. Budget tables display allocations but do not track cumulative
+privacy cost across runs.
+
+Input is not automatically centered or standardized. Any data-dependent
+preprocessing requires separate privacy accounting; see \code{\link[=dp_pca]{dp_pca()}} and
+\code{\link[=dp_score]{dp_score()}} for applicable conditions.
 }
 \examples{
 if (interactive()) {

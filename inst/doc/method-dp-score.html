@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Differentially Private PC Scores</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Differentially Private PC Scores</h1>
+
+
+<div id="TOC">
+<ul>
+<li><a href="#private-scores" id="toc-private-scores">1. Two-dimensional
+PC scores</a></li>
+<li><a href="#private-frame" id="toc-private-frame">2. Private plotting
+frame</a></li>
+<li><a href="#score-grid" id="toc-score-grid">3. Histogram grid and
+sensitivity</a></li>
+<li><a href="#histogram-estimators" id="toc-histogram-estimators">4.
+Private histogram estimators</a></li>
+<li><a href="#privacy-accounting" id="toc-privacy-accounting">5. Privacy
+budget allocation</a></li>
+<li><a href="#synthetic-sampling" id="toc-synthetic-sampling">6.
+Synthetic score sampling</a></li>
+<li><a href="#grouped-score" id="toc-grouped-score">7. Group-wise
+private score histograms</a></li>
+<li><a href="#references" id="toc-references">References</a></li>
+</ul>
+</div>
+
+<p>In ordinary PCA, a score plot displays the projected coordinates of
+individual observations along selected principal component (PC)
+directions. However, directly releasing these coordinates may reveal
+sensitive information about individual observations. To address this
+issue, the <code>dppca</code> package constructs a
+<strong>differentially private (DP) two-dimensional score
+histogram</strong>, which summarizes the distribution of projected
+scores without directly releasing individual coordinates.</p>
+<p>The procedure involves three main steps: obtaining <strong>private PC
+directions</strong>, constructing a <strong>private plotting
+frame</strong>, and estimating a <strong>private score
+histogram</strong>. Also, synthetic points can then be generated from
+the private histogram as a post-processing step, without requiring
+additional privacy budget.</p>
+<p>This article describes the mathematical construction and privacy
+accounting of these methods. For implementation details, plotting
+options, and examples, see the <a href="tutorials-score-plots.html">DP
+Score Plot Tutorial</a>. For background, see <a href="method-pca-background.html">PCA Background</a> and <a href="method-dp-loading.html">DP Directions Methodology</a>.</p>
+<div id="private-scores" class="section level2">
+<h2>1. Two-dimensional PC scores</h2>
+<p>Let <span class="math inline">\(X=(x_1,\ldots,x_n)^\top\in\mathbb
+R^{n\times p}\)</span> contain <span class="math inline">\(n\)</span>
+observations and <span class="math inline">\(p\)</span> numeric
+variables. Let <span class="math inline">\(\widetilde{V}=(\widetilde{v}_1,\ldots,\widetilde{v}_p)\)</span>
+be an orthonormal matrix of privately estimated PC directions. For
+selected, distinct components <span class="math inline">\(a,b\in\{1,\ldots,p\}\)</span>, define</p>
+<p><span class="math display">\[
+Y=X\widetilde{V},
+\qquad
+\widetilde{s}_i=\begin{pmatrix}
+x_i^\top\widetilde{v}_a\\
+x_i^\top\widetilde{v}_b
+\end{pmatrix}\in\mathbb R^2,
+\qquad i=1,\ldots,n.
+\]</span></p>
+<p>The projected coordinates <span class="math inline">\(\widetilde{s}_i\)</span> are needed internally to
+estimate the score distribution, but are not returned with a
+private-only result. Unlike an ordinary PCA score scatter plot, the
+released visualization is a private histogram of these two-dimensional
+points.</p>
+</div>
+<div id="private-frame" class="section level2">
+<h2>2. Private plotting frame</h2>
+<p>A histogram needs a rectangular plotting region, called its
+<strong>frame</strong>. Taking coordinate minima, maxima, or quantiles
+directly from private observations would leak data. Instead, the frame
+is constructed with the private quantile mechanisms of <a href="#ref-durfee-score">Durfee (2023)</a>.</p>
+<p>Let <span class="math inline">\(\varepsilon_F\)</span> be the epsilon
+budget allocated to frame estimation. The algorithm uses <strong>three
+pure-DP quantile releases</strong>, each with budget <span class="math inline">\(\varepsilon_F/3\)</span>: two coordinate medians
+and one radial quantile.</p>
+<div id="private-frame-center" class="section level3">
+<h3>2.1. Private coordinate medians</h3>
+<p>For the selected score coordinates, estimate a private center</p>
+<p><span class="math display">\[
+\widetilde{c}_1
+=\mathcal Q_{\varepsilon_F/3}(\{s_{i1}\}_{i=1}^n,0.5),
+\qquad
+\widetilde{c}_2
+=\mathcal Q_{\varepsilon_F/3}(\{s_{i2}\}_{i=1}^n,0.5),
+\qquad
+\widetilde{c}=(\widetilde{c}_1,\widetilde{c}_2)^\top.
+\]</span></p>
+<p>Here <span class="math inline">\(\mathcal
+Q_{\varepsilon}(\cdot,q)\)</span> denotes the fully unbounded private
+quantile mechanism at level <span class="math inline">\(q\)</span>.</p>
+<p>The implementation limits each one-sided search to 5,000
+geometric-grid queries, using a grid base of <span class="math inline">\(1.01\)</span> for frame estimation. If a search
+exhausts this limit without crossing its noisy target, the
+implementation issues a warning. For a coordinate median, capped search
+results are excluded; the estimator selects an uncapped nonzero result,
+preferring the positive result when both are available, or returns zero
+if neither is available.</p>
+</div>
+<div id="private-radial-quantile-and-square-frame" class="section level3">
+<h3>2.2. Private radial quantile and square frame</h3>
+<p>Next, compute the distance of each score from the private center:</p>
+<p><span class="math display">\[
+r_i=\|\widetilde{s}_i-\widetilde{c}\|_2
+=\sqrt{(\widetilde{s}_{i1}-\widetilde{c}_1)^2+(\widetilde{s}_{i2}-\widetilde{c}_2)^2}.
+\]</span></p>
+<p>Since <span class="math inline">\(r_i\ge0\)</span>, the
+implementation applies the <strong>one-sided unbounded private quantile
+mechanism</strong> with public lower bound zero to estimate the 0.99
+quantile:</p>
+<p><span class="math display">\[
+\widetilde{R}
+=\mathcal Q^{\mathrm{upper}}_{\varepsilon_F/3}
+(\{r_i\}_{i=1}^n,0.99).
+\]</span></p>
+<p>The radial search uses the grid <span class="math inline">\(t_i=1.01^i-1\)</span>, for <span class="math inline">\(i=1,\ldots,5000\)</span>. If no noisy count
+reaches the noisy target within that limit, the estimator warns and
+returns the final grid value. These finite search limits can affect
+frame accuracy at extreme data scales.</p>
+<p>The radius is enlarged by a fixed factor <span class="math inline">\(1+\alpha\)</span>, with <span class="math inline">\(\alpha=0.20\)</span> in the package. Writing <span class="math inline">\(R_F=(1+\alpha)\widetilde{R}\)</span>, the frame
+becomes</p>
+<p><span class="math display">\[
+F=[\widetilde{c}_1-R_F,\widetilde{c}_1+R_F]
+\times[\widetilde{c}_2-R_F,\widetilde{c}_2+R_F].
+\]</span></p>
+<p>Conditional on the required mechanism assumptions, sequential
+composition of the three pure-DP quantile releases gives the frame
+allocation <span class="math inline">\((\varepsilon_F,0)\)</span>.</p>
+</div>
+</div>
+<div id="score-grid" class="section level2">
+<h2>3. Histogram grid and sensitivity</h2>
+<p>Divide the private frame into <span class="math inline">\(m_x\)</span> horizontal-axis bins and <span class="math inline">\(m_y\)</span> vertical-axis bins, giving <span class="math inline">\(J=m_xm_y\)</span> rectangular cells <span class="math inline">\(B_1,\ldots,B_J\)</span>. The numbers of bins are
+public tuning choices.</p>
+<p>Let <span class="math inline">\(h_F(\widetilde{s}_i)\)</span> be the
+grid cell assigned to score <span class="math inline">\(\widetilde{s}_i\)</span>. If a coordinate falls
+outside the frame, the implementation assigns it to the corresponding
+boundary bin, rather than dropping that observation. For cell <span class="math inline">\(j\)</span>, define</p>
+<p><span class="math display">\[
+c_j=\sum_{i=1}^n\mathbf1\{h_F(\widetilde{s}_i)=j\},
+\qquad
+p_j=\frac{c_j}{n},
+\qquad j=1,\ldots,J.
+\]</span></p>
+<p>Since every score is assigned to a cell, <span class="math inline">\(\sum_j c_j=n\)</span> and <span class="math inline">\(\sum_jp_j=1\)</span> before noise is
+introduced.</p>
+<p>Under fixed-size replacement adjacency, replacing one observation can
+remove one count from a cell and add one count to another. Conditional
+on fixed private directions, a fixed frame, and appropriate
+preprocessing, the histogram count vector <span class="math inline">\(c=(c_1,\ldots,c_J)^\top\)</span> satisfies</p>
+<p><span class="math display">\[
+\Delta_1(c)\le2,
+\qquad
+\Delta_2(c)\le\sqrt{2}.
+\]</span></p>
+</div>
+<div id="histogram-estimators" class="section level2">
+<h2>4. Private histogram estimators</h2>
+<p>Two histogram methods are available: an <strong>additive Gaussian
+histogram</strong> and a <strong>stability-based sparse
+histogram</strong>. Both operate on the same privately estimated frame,
+but their perturbation and normalization rules differ. Write <span class="math inline">\((\varepsilon_H,\delta_H)\)</span> for the
+histogram privacy allocation.</p>
+<div id="additive-histogram" class="section level3">
+<h3>4.1. Additive Gaussian histogram</h3>
+<p>The additive method perturbs <strong>all <span class="math inline">\(J\)</span> bin counts</strong>, including empty
+bins, using a Gaussian perturbation by <a href="#ref-wasserman-score">Wasserman and Zhou, 2010</a>:</p>
+<p><span class="math display">\[
+\widetilde{c}_j=c_j+Z_j,
+\qquad Z_j\overset{\mathrm{iid}}\sim N(0,\sigma_H^2),
+\qquad
+\sigma_H=\frac{\sqrt{2}\sqrt{2\log(1.25/\delta_H)}}{\varepsilon_H}.
+\]</span></p>
+<p>The factor <span class="math inline">\(\sqrt{2}\)</span> comes from
+the count vector’s <span class="math inline">\(\ell_2\)</span>-sensitivity. This classical
+Gaussian calibration has a standard sufficient privacy guarantee for
+<span class="math inline">\(0&lt;\varepsilon_H&lt;1\)</span>. Larger
+histogram epsilon values require a separate calibration check, which the
+implementation does not perform. The direction-estimation calibration
+conditions in <a href="method-dp-loading.html#dp-private-directions">DP
+Directions Methodology</a> also apply when directions are estimated from
+the data.</p>
+<p>Negative noisy counts are replaced by zero and the remaining values
+are normalized:</p>
+<p><span class="math display">\[
+\widetilde{p}_j^{\mathrm{add}}
+=\frac{\max\{\widetilde{c}_j,0\}}
+{\sum_{h=1}^J\max\{\widetilde{c}_h,0\}}.
+\]</span></p>
+<p>The truncation and normalization are post-processing and do not
+themselves spend privacy budget. If <strong>all</strong> truncated noisy
+counts are zero, the <code>dppca</code> stops with an error instead of
+returning probabilities. For the related algorithm, see <a href="algorithms.html#alg-add-hist">Additive DP histogram</a>.</p>
+</div>
+<div id="sparse-histogram" class="section level3">
+<h3>4.2. Stability-based sparse histogram</h3>
+<p>The sparse approach is designed for grids containing many empty
+cells. It perturbs only <strong>nonempty</strong> empirical bin
+proportions, following the stability-based histogram idea discussed by
+<a href="#ref-karwa-score">Karwa and Vadhan (2018)</a>.</p>
+<p>For the <span class="math inline">\(n\)</span> observations, define
+the Laplace noise scale and threshold</p>
+<p><span class="math display">\[
+b_H=\frac{2}{n\varepsilon_H},
+\qquad
+T_H=\frac1n+\frac{2\log(2/\delta_H)}{n\varepsilon_H}.
+\]</span></p>
+<p>For each cell with <span class="math inline">\(c_j&gt;0\)</span>,
+draw <span class="math inline">\(L_j\sim\operatorname{Laplace}(0,b_H)\)</span> and
+set</p>
+<p><span class="math display">\[
+q_j=
+\begin{cases}
+\max\{p_j+L_j,0\},&amp;\max\{p_j+L_j,0\}\ge T_H,\\
+0,&amp;\text{otherwise}.
+\end{cases}
+\]</span></p>
+<p>For a cell with <span class="math inline">\(c_j=0\)</span>, set <span class="math inline">\(q_j=0\)</span> without drawing noise. The result
+is</p>
+<p><span class="math display">\[
+\widetilde{p}_j^{\mathrm{sparse}}=
+\begin{cases}
+\displaystyle\frac{q_j}{\sum_{h=1}^Jq_h},&amp;\sum_{h=1}^Jq_h&gt;0,\\
+0,&amp;\sum_{h=1}^Jq_h=0.
+\end{cases}
+\]</span></p>
+<p>Unlike the additive method, the sparse estimator can return an
+<strong>all-zero histogram</strong> when no cell passes the threshold.
+For the related algorithm, see the <a href="algorithms.html#alg-sparse-hist">Sparse DP histogram</a>.</p>
+</div>
+</div>
+<div id="privacy-accounting" class="section level2">
+<h2>5. Privacy budget allocation</h2>
+<p>A standalone score analysis has a <strong>loading</strong> budget for
+private directions and a <strong>score</strong> budget for the frame and
+histogram. Write</p>
+<p><span class="math display">\[
+(\varepsilon_L,\delta_L),\qquad
+(\varepsilon_{\mathrm{score}},\delta_{\mathrm{score}}).
+\]</span></p>
+<p>The <code>dp_score()</code> function subdivides the score budget
+as</p>
+<p><span class="math display">\[
+\begin{aligned}
+\varepsilon_F&amp;=0.35\,\varepsilon_{\mathrm{score}},
+&amp;\delta_F&amp;=0,\\
+\varepsilon_H&amp;=0.65\,\varepsilon_{\mathrm{score}},
+&amp;\delta_H&amp;=\delta_{\mathrm{score}}.
+\end{aligned}
+\]</span></p>
+<p>The private frame uses its epsilon equally for two coordinate medians
+and one radial quantile. The histogram receives the remaining epsilon
+and all of the score delta. With a single histogram method and private
+directions, the nominal composition budget is</p>
+<p><span class="math display">\[
+(\varepsilon_L+\varepsilon_F+\varepsilon_H,
+\;\delta_L+\delta_H)
+=(\varepsilon_L+\varepsilon_{\mathrm{score}},
+\;\delta_L+\delta_{\mathrm{score}}).
+\]</span></p>
+<p>By default, <code>dp_score()</code> requests both <code>&quot;add&quot;</code>
+and <code>&quot;sparse&quot;</code>; each receives the full histogram allocation.
+Releasing both outputs therefore requires composition across methods.
+With shared private directions and frame, basic sequential composition
+gives the nominal joint bound</p>
+<p><span class="math display">\[
+\begin{aligned}
+&amp;(\varepsilon_L+\varepsilon_F+2\varepsilon_H,
+\;\delta_L+2\delta_H)\\
+&amp;\qquad=(\varepsilon_L+1.65\,\varepsilon_{\mathrm{score}},
+\;\delta_L+2\delta_{\mathrm{score}}).
+\end{aligned}
+\]</span></p>
+<p>The budgets stored in <code>privacy</code> describe allocations,
+rather than this cumulative cost. These bounds are conditional on the
+privacy guarantees of the component mechanisms, including the Gaussian
+calibration conditions above. In contrast, <code>dp_pca()</code> selects
+one histogram method per fit, so its score component uses the
+single-method accounting.</p>
+</div>
+<div id="synthetic-sampling" class="section level2">
+<h2>6. Synthetic score sampling</h2>
+<p>The released private histogram represents an estimated distribution
+of projected scores, rather than the original observations. Synthetic
+score points can be generated from this distribution using either center
+or uniform sampling.</p>
+<p>Let <span class="math inline">\(B_1,\ldots,B_J\)</span> denote the
+histogram bins, with private probabilities <span class="math inline">\(\widetilde{p}_1,\ldots,\widetilde{p}_J\)</span>.
+For each synthetic point, a bin index is first sampled according to</p>
+<p><span class="math display">\[
+A\sim\operatorname{Categorical}
+(\widetilde{p}_1,\ldots,\widetilde{p}_J).
+\]</span></p>
+<p>The coordinates are then generated using one of two methods.</p>
+<ul>
+<li><p><strong>Center sampling:</strong> Let <span class="math inline">\(c_A\)</span> denote the center of the selected bin
+<span class="math inline">\(B_A\)</span>. A synthetic point is generated
+by adding Gaussian noise to this center: <span class="math display">\[
+S^*=c_A+Z.
+\]</span></p></li>
+<li><p><strong>Uniform sampling:</strong> First, a point is drawn
+uniformly within the selected bin <span class="math inline">\(B_A\)</span>, and Gaussian noise is then added:
+<span class="math display">\[
+U\mid A\sim\operatorname{Uniform}(B_A),
+\qquad
+S^*=U+Z.
+\]</span></p></li>
+</ul>
+<p>In both methods, the Gaussian noise is independently generated as</p>
+<p><span class="math display">\[
+Z\sim N_2\left(
+0,\,
+\gamma^2
+\begin{pmatrix}
+\Delta_x^2 &amp; 0\\
+0 &amp; \Delta_y^2
+\end{pmatrix}
+\right),
+\]</span></p>
+<p>where <span class="math inline">\(\Delta_x\)</span> and <span class="math inline">\(\Delta_y\)</span> are the histogram bin widths and
+<span class="math inline">\(\gamma\)</span> is the smoothing multiplier
+specified by <code>bandwidth_scale</code>. The default values are <span class="math inline">\(\gamma=0.5\)</span> for center sampling and <span class="math inline">\(\gamma=0.25\)</span> for uniform sampling. Setting
+<span class="math inline">\(\gamma=0\)</span> removes the Gaussian
+noise.</p>
+</div>
+<div id="grouped-score" class="section level2">
+<h2>7. Group-wise private score histograms</h2>
+<p>Suppose every observation has a group label <span class="math inline">\(g_i\in\mathcal G\)</span>. With <strong>public,
+fixed group memberships</strong>, the procedure estimates one set of
+private directions and one private frame using all observations, then
+releases one histogram for each group on the same grid. Write</p>
+<p><span class="math display">\[
+c_j^{(g)}
+=\sum_{i=1}^n\mathbf1\{g_i=g,\ h_F(\widetilde{s}_i)=j\},
+\qquad g\in\mathcal G,\ j=1,\ldots,J.
+\]</span></p>
+<p>Each group applies the selected private histogram mechanism to its
+own counts and normalizes within that group.<br />
+When the groups form disjoint, publicly fixed subsets, <strong>parallel
+composition across groups</strong> can justify using the same histogram
+privacy allocation for every group of a single method. The shared
+direction and frame costs are paid once.</p>
+<p>For related procedures, see <a href="algorithms.html#alg-group-add-hist">Group-wise additive
+histogram</a> and <a href="algorithms.html#alg-group-sparse-hist">Group-wise sparse
+histogram</a>.</p>
+<div id="score-display-centering" class="section level3">
+<h3>8.1. Display centering</h3>
+<p>In ordinary PCA, the input data are typically mean-centered before
+projection, so the resulting PC scores have sample mean zero. In
+contrast, the <code>dppca</code> package does not automatically
+mean-center the input data, and the private projected scores are not
+necessarily centered at the origin.</p>
+<p>To facilitate visual interpretation, the package provides an optional
+<strong>display-centering</strong> adjustment using the privately
+estimated frame center <span class="math inline">\(\widetilde{c}=(\widetilde{c}_1,\widetilde{c}_2)^\top\)</span>
+defined in <a href="#private-frame-center">Section 2.1</a>.</p>
+<p>For each displayed coordinate <span class="math inline">\(\ell\in\{1,2\}\)</span>, define the
+display-centering adjustment as</p>
+<p><span class="math display">\[
+c_\ell^{\mathrm{disp}}
+=
+\begin{cases}
+\widetilde{c}_\ell, &amp; \text{if center = TRUE},\\
+0, &amp; \text{if center = FALSE}.
+\end{cases}
+\]</span></p>
+<p>Let <span class="math inline">\(c^{\mathrm{disp}}=(c_1^{\mathrm{disp}},c_2^{\mathrm{disp}})^\top\)</span>.
+Each histogram cell <span class="math inline">\(B_j\)</span> and
+synthetic score point <span class="math inline">\(S^*\)</span> are
+displayed using the translated coordinates</p>
+<p><span class="math display">\[
+B_j^{\mathrm{disp}}=B_j-c^{\mathrm{disp}},
+\qquad
+S^{*,\mathrm{disp}}=S^*-c^{\mathrm{disp}}.
+\]</span></p>
+<p>With <code>center = TRUE</code> (the default), the displayed frame
+becomes <span class="math inline">\(F^{\mathrm{disp}}=F-\widetilde{c}\)</span>, whose
+center is <span class="math inline">\((0,0)\)</span>. With
+<code>center = FALSE</code>, the original private frame coordinates are
+displayed without any shift.</p>
+<p>For group-wise histograms, the same display-centering adjustment is
+applied to all groups. The ordinary PCA reference, when requested,
+already uses sample-mean-centered scores and a zero-centered reference
+frame.</p>
+<p>Display centering is purely <strong>post-processing</strong>: it
+changes only the plotted coordinates without modifying the stored
+private estimates, histogram probabilities, or sampled points, and
+requires no additional privacy budget. The same adjustment is also used
+in the DP biplot to allow variable arrows to originate at <span class="math inline">\((0,0)\)</span> in <a href="method-dp-visualization.html#dp-biplot-visualization">Section 3.2:
+DP biplot</a>. In <code>plot.dp_pca()</code>, the <code>center</code>
+option is shared by the score and biplot displays.</p>
+<p>For implementation details, plotting options, and examples, see the
+<a href="tutorials-score-plots.html">DP Score Plot Tutorial</a>.</p>
+</div>
+</div>
+<div id="references" class="section level2">
+<h2>References</h2>
+<p><span id="ref-durfee-score"></span> Durfee, D. (2023). <em>Unbounded
+differentially private quantile and maximum estimation</em>. Advances in
+Neural Information Processing Systems, 36, 77691–77712. <a href="https://doi.org/10.52202/075280-3394" class="uri">https://doi.org/10.52202/075280-3394</a></p>
+<p><span id="ref-wasserman-score"></span> Wasserman, L., and Zhou, S.
+(2010). <em>A statistical framework for differential privacy</em>.
+Journal of the American Statistical Association, 105(489), 375–389. <a href="https://doi.org/10.1198/jasa.2009.tm08651" class="uri">https://doi.org/10.1198/jasa.2009.tm08651</a></p>
+<p><span id="ref-karwa-score"></span> Karwa, V., and Vadhan, S. (2018).
+<em>Finite sample differentially private confidence intervals</em>.
+Proceedings of ITCS 2018, LIPIcs 94, 44:1–44:9. <a href="https://doi.org/10.4230/LIPIcs.ITCS.2018.44" class="uri">https://doi.org/10.4230/LIPIcs.ITCS.2018.44</a></p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

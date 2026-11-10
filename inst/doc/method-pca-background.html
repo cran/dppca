@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Principal Component Analysis</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Principal Component Analysis</h1>
+
+
+
+<div id="introduction" class="section level2">
+<h2>1. Introduction</h2>
+<p>Principal component analysis (PCA) is a method that represents
+multivariate observations in a lower-dimensional space while preserving
+as much variation as possible. It constructs mutually orthogonal axes,
+called principal component (PC) directions, and projects observations
+onto these axes.</p>
+<p>Suppose we observe <span class="math inline">\(n\)</span> vectors
+<span class="math inline">\(x_1,\ldots,x_n\in\mathbb{R}^p\)</span>,
+collected as the rows of an <span class="math inline">\(n\times
+p\)</span> data matrix</p>
+<p><span class="math display">\[
+X=
+\begin{bmatrix}
+x_1^\top\\
+\vdots\\
+x_n^\top
+\end{bmatrix}.
+\]</span></p>
+<p>Each row represents an observation, and each column represents a
+variable.</p>
+</div>
+<div id="population-pca" class="section level2">
+<h2>2. Population PCA</h2>
+<p>Let <span class="math inline">\(\xi\in\mathbb{R}^p\)</span> be a
+random vector with mean <span class="math inline">\(\mu=E[\xi]\)</span>
+and covariance matrix <span class="math inline">\(\Sigma
+=
+\operatorname{Cov}(\xi),\)</span> assuming finite second moments.</p>
+<p>For a unit vector <span class="math inline">\(v\in\mathbb{R}^p\)</span>, the variance of the
+projection <span class="math inline">\(v^\top\xi\)</span> is <span class="math inline">\(\operatorname{Var}(v^\top\xi)=v^\top\Sigma
+v\)</span>.</p>
+<p>The first PC direction maximizes this projected variance:</p>
+<p><span class="math display">\[
+v_1\in\arg\max_{\|v\|_2=1}v^\top\Sigma v.
+\]</span> Each subsequent direction maximizes the same quantity subject
+to being orthogonal to the preceding directions.</p>
+<p>Since <span class="math inline">\(\Sigma\)</span> is symmetric and
+positive semidefinite, it has an eigen-decomposition</p>
+<p><span class="math display">\[
+\Sigma=V\Lambda V^\top,
+\quad
+V=[v_1,\ldots,v_p],
+\quad
+\Lambda=\operatorname{diag}(\lambda_1,\ldots,\lambda_p),
+\]</span></p>
+<p>where the <span class="math inline">\(v_\ell\)</span> are orthonormal
+eigenvectors and <span class="math inline">\(\lambda_1\ge\cdots\ge\lambda_p\ge0\)</span>. In
+particular,</p>
+<p><span class="math display">\[
+\Sigma v_\ell=\lambda_\ell v_\ell,
+\quad
+\operatorname{Var}(v_\ell^\top\xi)=\lambda_\ell.
+\]</span></p>
+<p>Thus, <strong>eigenvectors determine the PC directions</strong>,
+while <strong>eigenvalues quantify the variance along those
+directions</strong>. The first few principal components account for the
+largest amounts of variation along mutually orthogonal directions.</p>
+</div>
+<div id="sample-pca" class="section level2">
+<h2>3. Sample PCA</h2>
+<p>In practice, the population covariance matrix <span class="math inline">\(\Sigma\)</span> is generally unknown, so PCA is
+performed using the sample covariance matrix</p>
+<p><span class="math display">\[
+\widehat \Sigma
+=
+\frac{1}{n-1}
+\sum_{i=1}^n
+(x_i-\bar x)(x_i-\bar x)^\top,
+\qquad
+\bar x=\frac1n\sum_{i=1}^n x_i.
+\]</span></p>
+<p>Equivalently, letting <span class="math inline">\(X_c=X-\mathbf{1}_n\bar x^\top\)</span> denote the
+centered data matrix, where <span class="math inline">\(\mathbf{1}_n\)</span> is the <span class="math inline">\(n\)</span>-dimensional vector of ones, we can
+write</p>
+<p><span class="math display">\[
+\widehat \Sigma =\frac{1}{n-1}X_c^\top X_c.
+\]</span></p>
+<div id="directions" class="section level3">
+<h3>3.1 Directions</h3>
+<p>The <strong>PC directions</strong> are obtained from the
+eigen-decomposition of the sample covariance matrix: <span class="math display">\[
+\widehat \Sigma =\widehat V\widehat\Lambda\widehat V^\top,
+\quad
+\widehat V=[\widehat v_1,\ldots,\widehat v_p],
+\quad
+\widehat\Lambda
+=\operatorname{diag}(\widehat\lambda_1,\ldots,\widehat\lambda_p),
+\]</span></p>
+<p>where <span class="math inline">\(\widehat\lambda_1\ge\cdots\ge\widehat\lambda_p\ge0\)</span>.</p>
+<p>The columns of <span class="math inline">\(\widehat V\)</span> are
+orthonormal eigenvectors satisfying</p>
+<p><span class="math display">\[
+\widehat \Sigma \widehat v_\ell
+=
+\widehat\lambda_\ell\widehat v_\ell,
+\qquad \ell=1,\ldots,p.
+\]</span></p>
+<p>Each direction <span class="math inline">\(\widehat v_\ell\)</span>
+defines a PC axis, with the first direction corresponding to the largest
+sample variance.</p>
+</div>
+<div id="eigenvalues" class="section level3">
+<h3>3.2 Eigenvalues</h3>
+<p>The <strong>eigenvalues</strong> of <span class="math inline">\(\widehat \Sigma\)</span> represent the sample
+variances along the corresponding PC directions. In particular, <span class="math display">\[
+\widehat\lambda_\ell
+=
+\widehat v_\ell^\top \widehat \Sigma\widehat v_\ell,
+\qquad \ell=1,\ldots,p.
+\]</span></p>
+<p>The <strong>proportion of variance explained (PVE)</strong> by the
+<span class="math inline">\(\ell\)</span>th principal component is
+defined as</p>
+<p><span class="math display">\[
+\operatorname{PVE}_\ell
+=
+\frac{\widehat\lambda_\ell}
+{\sum_{j=1}^p\widehat\lambda_j},
+\]</span></p>
+<p>where the denominator equals <span class="math inline">\(\operatorname{tr}(\widehat \Sigma)\)</span>, the
+total sample variance, assumed to be positive.</p>
+</div>
+<div id="scores" class="section level3">
+<h3>3.3 Scores</h3>
+<p>The <strong>PC scores</strong> are obtained by projecting the
+centered observations onto the PC directions. The score matrix is
+defined as <span class="math display">\[
+S=X_c\widehat V,
+\]</span></p>
+<p>where the <span class="math inline">\(\ell\)</span>th PC score of
+observation <span class="math inline">\(i\)</span> is <span class="math inline">\(s_{i\ell}
+=
+\widehat v_\ell^\top(x_i-\bar x)\)</span>.</p>
+<p>For dimensionality reduction, we may retain only the first <span class="math inline">\(k\)</span> principal components. Letting <span class="math inline">\(\widehat V_k=[\widehat v_1,\ldots,\widehat
+v_k]\)</span>, the corresponding reduced score matrix is <span class="math inline">\(S_k=X_c\widehat V_k\)</span>.</p>
+</div>
+</div>
+<div id="pca-visualizations" class="section level2">
+<h2>4. PCA visualizations</h2>
+<p>PCA provides several visualization methods for exploring different
+aspects of multivariate data. The five commonly used displays are
+loading plots, scree plots, score plots, variable plots, and
+biplots.</p>
+<p>For two-dimensional visualizations, let <span class="math inline">\(a\)</span> and <span class="math inline">\(b\)</span> denote two selected principal component
+indices, with <span class="math inline">\(1\le a&lt;b\le p\)</span>.
+Although the first two components are commonly used, any two components
+can be selected depending on the purpose of the analysis.</p>
+<div id="loading-plot" class="section level3">
+<h3>4.1 Loading plot</h3>
+<p>A <strong>loading plot</strong> displays the coefficients of the
+original variables in the PC directions. Specifically, let <span class="math inline">\(\widehat v_{j\ell}\)</span> denote the coefficient
+of variable <span class="math inline">\(j\)</span> in PC direction <span class="math inline">\(\ell\)</span>. For two selected components <span class="math inline">\(a\)</span> and <span class="math inline">\(b\)</span>, the loading plot represents variable
+<span class="math inline">\(j\)</span> by</p>
+<p><span class="math display">\[
+L_j=(\widehat v_{ja},\widehat v_{jb}).
+\]</span></p>
+<p>The magnitude of each coefficient indicates the contribution of the
+corresponding variable to a PC direction. Larger absolute coefficients
+indicate greater contributions, while the signs distinguish
+contributions in opposite directions.</p>
+</div>
+<div id="scree-plot" class="section level3">
+<h3>4.2 Scree plot</h3>
+<p>A <strong>scree plot</strong> displays the eigenvalues <span class="math inline">\(\widehat\lambda_\ell\)</span> against the
+component indices <span class="math inline">\(\ell=1,\ldots,p\)</span>.
+Since each eigenvalue represents the sample variance along its
+corresponding PC direction, the plot illustrates how the total variation
+is distributed across the principal components.</p>
+<p>Alternatively, the proportion of variance explained (PVE) can be
+plotted against the component index. These displays help identify the
+components that account for most of the variation and guide the choice
+of how many components to retain.</p>
+</div>
+<div id="score-plot" class="section level3">
+<h3>4.3 Score plot</h3>
+<p>A <strong>score plot</strong> displays the projections of
+observations onto selected PC directions. For two selected components
+<span class="math inline">\(a\)</span> and <span class="math inline">\(b\)</span>, the score plot represents observation
+<span class="math inline">\(i\)</span> by</p>
+<p><span class="math display">\[
+(s_{ia},s_{ib}),
+\]</span></p>
+<p>where <span class="math inline">\(s_{i\ell}=\widehat
+v_\ell^\top(x_i-\bar x)\)</span> is the score of observation <span class="math inline">\(i\)</span> on the <span class="math inline">\(\ell\)</span>th principal component.</p>
+<p>Score plots are useful for exploring patterns, group structures, and
+potential outliers in the data.</p>
+</div>
+<div id="variable-plot" class="section level3">
+<h3>4.4 Variable plot (correlation circle)</h3>
+<p>A <strong>variable plot</strong> displays the correlations between
+the original variables and the PC scores. Let <span class="math inline">\(\widehat \sigma_j=\sqrt{\widehat
+\Sigma_{jj}}\)</span> denote the sample standard deviation of variable
+<span class="math inline">\(j\)</span>. For <span class="math inline">\(\widehat \sigma&gt;0\)</span> and <span class="math inline">\(\widehat\lambda_\ell&gt;0\)</span>, the sample
+correlation between variable <span class="math inline">\(j\)</span> and
+the <span class="math inline">\(\ell\)</span>th PC scores is <span class="math display">\[
+\operatorname{Cor}(X_{\cdot j},S_{\cdot\ell})
+=
+\frac{\sqrt{\widehat\lambda_\ell}\,\widehat v_{j\ell}}{\widehat
+\sigma_j},
+\]</span></p>
+<p>where <span class="math inline">\(X_{\cdot j}\)</span> and <span class="math inline">\(S_{\cdot\ell}\)</span> denote the <span class="math inline">\(j\)</span>th and <span class="math inline">\(\ell\)</span>th columns of <span class="math inline">\(X\)</span> and <span class="math inline">\(S\)</span>, respectively.</p>
+<p>For two selected components <span class="math inline">\(a\)</span>
+and <span class="math inline">\(b\)</span>, the variable plot represents
+variable <span class="math inline">\(j\)</span> by</p>
+<p><span class="math display">\[
+R_j=
+\left(
+\operatorname{Cor}(X_{\cdot j},S_{\cdot a}),
+\operatorname{Cor}(X_{\cdot j},S_{\cdot b})
+\right).
+\]</span></p>
+<p>Since <span class="math inline">\(\|R_j\|_2^2
+=
+\operatorname{Cor}(X_{\cdot j},S_{\cdot a})^2
++
+\operatorname{Cor}(X_{\cdot j},S_{\cdot b})^2
+\le 1,\)</span> the variable coordinates lie inside or on the unit
+circle.</p>
+<p>Variables near the unit circle are well represented by the two
+selected components, whereas variables near the origin have relatively
+little of their variation represented in the displayed plane. Also, the
+angles between variable vectors can provide information about
+associations between variables, particularly when both variables are
+well represented by the selected components.</p>
+</div>
+<div id="biplot" class="section level3">
+<h3>4.5 Biplot</h3>
+<p>A <strong>biplot</strong> displays observations and variables
+simultaneously in a low-dimensional representation of the data. To
+describe its construction, consider the reduced singular value
+decomposition (SVD) of the centered data matrix:</p>
+<p><span class="math display">\[
+X_c=UDV^\top,
+\]</span></p>
+<p>where <span class="math inline">\(r=\operatorname{rank}(X_c)\)</span>, <span class="math inline">\(U\in\mathbb R^{n\times r}\)</span> and <span class="math inline">\(V\in\mathbb R^{p\times r}\)</span> have
+orthonormal columns, and</p>
+<p><span class="math display">\[
+D=\operatorname{diag}(d_1,\ldots,d_r),
+\qquad d_1\ge\cdots\ge d_r&gt;0.
+\]</span></p>
+<p>For a two-dimensional biplot, let <span class="math inline">\(I=\{a,b\}\)</span> denote the selected component
+indices, where <span class="math inline">\(1\le a&lt;b\le r\)</span>.
+Define</p>
+<p><span class="math display">\[
+U_I=[u_a,u_b],
+\qquad
+D_I=\operatorname{diag}(d_a,d_b),
+\qquad
+V_I=[v_a,v_b].
+\]</span></p>
+<p>The corresponding rank-two approximation of the centered data matrix
+is</p>
+<p><span class="math display">\[
+X_c\approx U_ID_IV_I^\top.
+\]</span></p>
+<p>A general family of biplot scalings is defined by</p>
+<p><span class="math display">\[
+G_\alpha=U_ID_I^{1-\alpha},
+\qquad
+H_\alpha=V_ID_I^\alpha,
+\qquad 0\le\alpha\le1.
+\]</span></p>
+<p>Recall that the PC score matrix for the selected components is <span class="math inline">\(S_I=X_cV_I=U_ID_I\)</span>. Therefore, <span class="math inline">\(G_\alpha=U_ID_I^{1-\alpha}=S_ID_I^{-\alpha}\)</span>
+showing that the observation coordinates in a biplot are obtained by
+scaling the ordinary PC scores according to <span class="math inline">\(\alpha\)</span>.</p>
+<p>These matrices satisfy <span class="math inline">\(G_\alpha
+H_\alpha^\top\approx X_c\)</span>. The rows of <span class="math inline">\(G_\alpha\)</span> represent observations, while
+the rows of <span class="math inline">\(H_\alpha\)</span> represent
+variables. The parameter <span class="math inline">\(\alpha\)</span>
+determines how the singular-value scaling is distributed between
+them:</p>
+<ul>
+<li><span class="math inline">\(\alpha=0\)</span>: Observation
+coordinates are the ordinary PC scores on the selected components, and
+variable coordinates are the corresponding PC direction
+coefficients.</li>
+<li><span class="math inline">\(\alpha=1/2\)</span>: Singular-value
+scaling is shared symmetrically between observations and variables.</li>
+<li><span class="math inline">\(\alpha=1\)</span>: Variable coordinates
+are scaled by the singular values, emphasizing the variance and
+covariance structure of the original variables.</li>
+</ul>
+<p><strong>Note.</strong> Since <span class="math inline">\(\widehat\Sigma=\frac{1}{n-1}VD^2V^\top\)</span>,
+the columns of <span class="math inline">\(V\)</span> are eigenvectors
+of <span class="math inline">\(\widehat\Sigma\)</span>, with
+corresponding positive eigenvalues <span class="math inline">\(\widehat\lambda_\ell=\frac{d_\ell^2}{n-1}\)</span>,
+<span class="math inline">\(\ell=1,\ldots,r\)</span>. Thus, the right
+singular vectors of <span class="math inline">\(X_c\)</span> provide the
+sample PC directions, while its singular values determine the
+corresponding eigenvalues. Hence, PCA can equivalently be performed
+using the SVD of <span class="math inline">\(X_c\)</span>.</p>
+</div>
+<div id="summary-of-pca-visualizations" class="section level3">
+<h3>Summary of PCA visualizations</h3>
+<p>The five visualization methods provide complementary information
+about the data:</p>
+<style>
+.pca-vis-table table { width: 100%; table-layout: fixed; }
+.pca-vis-table colgroup col:nth-child(1) { width: 20% !important; }
+.pca-vis-table colgroup col:nth-child(2) { width: 80% !important; }
+</style>
+<div class="pca-vis-table">
+<table>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Display</th>
+<th>Main purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Loading plot</td>
+<td>Examine the contributions of variables to PC directions</td>
+</tr>
+<tr class="even">
+<td>Scree plot</td>
+<td>Assess the variance explained by each principal component</td>
+</tr>
+<tr class="odd">
+<td>Score plot</td>
+<td>Explore the distribution and patterns of observations in PC
+space</td>
+</tr>
+<tr class="even">
+<td>Variable plot</td>
+<td>Examine correlations between original variables and PC scores</td>
+</tr>
+<tr class="odd">
+<td>Biplot</td>
+<td>Explore observations and variables in a common display</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div id="references" class="section level2">
+<h2>References</h2>
+<p>Abdi, H. and Williams, L. J. (2010). Principal component analysis.
+<em>WIREs Computational Statistics</em>, 2(4), 433–459. <a href="https://doi.org/10.1002/wics.101" class="uri">https://doi.org/10.1002/wics.101</a></p>
+<p>Gabriel, K. R. (1971). The biplot graphic display of matrices with
+application to principal component analysis. <em>Biometrika</em>, 58(3),
+453–467. <a href="https://doi.org/10.1093/biomet/58.3.453" class="uri">https://doi.org/10.1093/biomet/58.3.453</a></p>
+<p>Greenacre, M., Groenen, P. J. F., Hastie, T., Iodice D’Enza, A.,
+Markos, A., and Tuzhilina, E. (2022). Principal component analysis.
+<em>Nature Reviews Methods Primers</em>, 2, 100. <a href="https://doi.org/10.1038/s43586-022-00184-w" class="uri">https://doi.org/10.1038/s43586-022-00184-w</a></p>
+<p>Jolliffe, I. T. (2002). <em>Principal Component Analysis</em> (2nd
+ed.). Springer, New York. <a href="https://doi.org/10.1007/b98835" class="uri">https://doi.org/10.1007/b98835</a></p>
+<p>Jolliffe, I. T. and Cadima, J. (2016). Principal component analysis:
+a review and recent developments. <em>Philosophical Transactions of the
+Royal Society A</em>, 374(2065), 20150202. <a href="https://doi.org/10.1098/rsta.2015.0202" class="uri">https://doi.org/10.1098/rsta.2015.0202</a></p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

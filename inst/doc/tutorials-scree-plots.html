@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>DP Scree Plots</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">DP Scree Plots</h1>
+
+
+<div id="TOC">
+<ul>
+<li><a href="#load-the-example-data" id="toc-load-the-example-data">1.
+Load the example data</a></li>
+<li><a href="#set-the-privacy-budget-and-estimate-scree-values" id="toc-set-the-privacy-budget-and-estimate-scree-values">2. Set the
+privacy budget and estimate scree values</a></li>
+<li><a href="#inspect-and-plot-the-result" id="toc-inspect-and-plot-the-result">3. Inspect and plot the
+result</a></li>
+<li><a href="#choose-a-method-and-its-tuning-parameters" id="toc-choose-a-method-and-its-tuning-parameters">4. Choose a method
+and its tuning parameters</a></li>
+<li><a href="#compare-multiple-methods-and-account-for-releases" id="toc-compare-multiple-methods-and-account-for-releases">5. Compare
+multiple methods and account for releases</a></li>
+<li><a href="#reusing-private-pc-directions" id="toc-reusing-private-pc-directions">6. Reusing Private PC
+Directions</a></li>
+<li><a href="#customize-the-plot" id="toc-customize-the-plot">7.
+Customize the plot</a></li>
+</ul>
+</div>
+
+<p>This tutorial shows how to use <code>dp_scree()</code> to estimate
+private scree values and proportions of variance explained (PVE),
+inspect the results, and draw scree and PVE plots. Also, it explains how
+to choose among the <strong>clipped mean</strong>, <strong>private
+modified winsorized mean (PMWM)</strong>, and <strong>Huber
+mean</strong> estimators.</p>
+<p>The focus here is on <strong>R arguments, control settings, and
+visualization</strong>. For the paired-difference construction,
+mathematical formulas, and privacy accounting, see <a href="method-dp-scree.html">DP Scree Methodology</a>. For installation,
+example datasets, input requirements, and general privacy budget
+allocation, see <a href="tutorials-getting-started.html">Getting
+Started</a>.</p>
+<div id="load-the-example-data" class="section level2">
+<h2>1. Load the example data</h2>
+<p>We use <code>gau</code>, a synthetic dataset with 1,000 observations
+and 20 numeric variables. For more details, see the documentation for <a href="../reference/gau.html"><code>gau</code></a>.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(dppca)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">data</span>(<span class="st">&quot;gau&quot;</span>, <span class="at">package =</span> <span class="st">&quot;dppca&quot;</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>X <span class="ot">&lt;-</span> gau</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="fu">dim</span>(X)</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="co">#&gt; [1] 1000   20</span></span></code></pre></div>
+</div>
+<div id="set-the-privacy-budget-and-estimate-scree-values" class="section level2">
+<h2>2. Set the privacy budget and estimate scree values</h2>
+<p>Scree estimation needs a <code>loading</code> budget for private PC
+directions and a <code>scree</code> budget for the private variance
+estimator. When <code>split</code> is omitted,<code>dp_scree()</code>
+divides the total budget <strong>equally</strong> between these two
+components.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>scree_privacy <span class="ot">&lt;-</span> <span class="fu">privacy_control</span>(</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>  <span class="at">eps =</span> <span class="dv">6</span>,</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>  <span class="at">delta =</span> <span class="fl">1e-4</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>)</span></code></pre></div>
+<p>You can also specify a different allocation using <code>split</code>
+as explained in <a href="tutorials-getting-started.html">Getting
+Started</a>.</p>
+<p>First, we use the clipped mean method to estimate scree values for
+the first five PCs:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>scree_fit <span class="ot">&lt;-</span> <span class="fu">dp_scree</span>(</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>  X,</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="at">k =</span> <span class="dv">5</span>,</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="at">privacy =</span> scree_privacy,</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;clipped&quot;</span>,</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">clipped_control</span>(<span class="at">C_clip =</span> <span class="dv">20</span>),</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a>  <span class="at">non_private =</span> <span class="cn">TRUE</span></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a>)</span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>scree_fit</span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a><span class="co">#&gt; Differentially Private Scree Estimates</span></span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="co">#&gt; Data: 1000 observations x 20 variables</span></span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="co">#&gt; Components: 20 PC directions; 5 scree estimates</span></span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a><span class="co">#&gt; Methods: scree = clipped </span></span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a><span class="co">#&gt; Total privacy budget: eps = 6; delta = 1e-04</span></span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a><span class="co">#&gt; Non-private reference: included</span></span></code></pre></div>
+<p>The <code>clipped_control()</code> function requires a public
+clipping threshold. The value <code>C_clip = 20</code> is an
+illustrative setting, not an automatic or universally recommended
+choice.</p>
+<p>The main arguments of <code>dp_scree()</code> are:</p>
+<style>
+.scree-argument-table table {
+width: 100%;
+table-layout: fixed;
+}
+.scree-argument-table colgroup col:first-child {
+width: 18% !important;
+}
+.scree-argument-table colgroup col:nth-child(2) {
+width: 82% !important;
+}
+</style>
+<div class="scree-argument-table">
+<table>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Argument</th>
+<th align="left">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>X</code></td>
+<td align="left">Input observations, with numeric features in
+columns.</td>
+</tr>
+<tr class="even">
+<td align="left"><code>k</code></td>
+<td align="left">Number of leading PCs to estimate, from 1 to the number
+of numeric variables.</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>privacy</code></td>
+<td align="left">Total budget and loading/scree allocation from
+<code>privacy_control()</code>.</td>
+</tr>
+<tr class="even">
+<td align="left"><code>method</code></td>
+<td align="left">One or more of <code>&quot;clipped&quot;</code>,
+<code>&quot;pmwm&quot;</code>, and <code>&quot;huber&quot;</code> (default:
+<code>&quot;clipped&quot;</code>).</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>control</code></td>
+<td align="left">Method-specific tuning parameters, specified using
+<code>clipped_control()</code>, <code>pmwm_control()</code>, or
+<code>huber_control()</code>.</td>
+</tr>
+<tr class="even">
+<td align="left"><code>cpp.option</code></td>
+<td align="left">Use the compiled direction estimator
+(<code>TRUE</code>, the default) or its R implementation
+(<code>FALSE</code>).</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>mono</code></td>
+<td align="left">Enforce a nonincreasing scree sequence via isotonic
+regression (default: <code>TRUE</code>).</td>
+</tr>
+<tr class="even">
+<td align="left"><code>non_private</code></td>
+<td align="left">Compute an ordinary PCA comparison when
+<code>TRUE</code> (default: <code>FALSE</code>).</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>V_dp</code></td>
+<td align="left">Optionally reuse previously estimated private
+directions; their earlier loading budget must still be recorded.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="inspect-and-plot-the-result" class="section level2">
+<h2>3. Inspect and plot the result</h2>
+<p>Printing <code>scree_fit</code> shows a short overview of the fitted
+results. To see scree values, PVE, and cumulative PVE for each stored
+method, use <code>summary()</code>:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>scree_summary <span class="ot">&lt;-</span> <span class="fu">summary</span>(scree_fit)</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>scree_summary</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="co">#&gt; DP Scree Estimates Summary</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="co">#&gt; Data: 1000 observations x 20 variables</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt; Components: 20 PC directions; 5 scree estimates</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co">#&gt; Methods: scree = clipped </span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt; DP component importance:</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt;                    PC1    PC2    PC3    PC4    PC5</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt; Eigenvalue     12.0624 7.4371 3.9225 3.9225 3.9225</span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co">#&gt; PVE             0.3858 0.2379 0.1255 0.1255 0.1255</span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt; Cumulative PVE  0.3858 0.6236 0.7491 0.8745 1.0000</span></span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a><span class="co">#&gt; Proportions are normalized over 5 estimated components.</span></span>
+<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-16"><a href="#cb4-16" tabindex="-1"></a><span class="co">#&gt; Allocated privacy budget:</span></span>
+<span id="cb4-17"><a href="#cb4-17" tabindex="-1"></a><span class="co">#&gt;         eps delta</span></span>
+<span id="cb4-18"><a href="#cb4-18" tabindex="-1"></a><span class="co">#&gt; Loading   3 5e-05</span></span>
+<span id="cb4-19"><a href="#cb4-19" tabindex="-1"></a><span class="co">#&gt; Scree     3 5e-05</span></span>
+<span id="cb4-20"><a href="#cb4-20" tabindex="-1"></a><span class="co">#&gt; Total     6 1e-04</span></span>
+<span id="cb4-21"><a href="#cb4-21" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-22"><a href="#cb4-22" tabindex="-1"></a><span class="co">#&gt; Non-private reference: included</span></span></code></pre></div>
+<p>The numeric estimates remain directly accessible by method. The
+optional ordinary PCA reference is under <code>nonprivate</code>, while
+data dimensions, selected methods, and privacy allocations are under
+<code>metadata</code>:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>scree_fit<span class="sc">$</span>clipped<span class="sc">$</span>scree</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="co">#&gt;       PC1       PC2       PC3       PC4       PC5 </span></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="co">#&gt; 12.062398  7.437085  3.922463  3.922463  3.922463</span></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>scree_fit<span class="sc">$</span>clipped<span class="sc">$</span>pve</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="co">#&gt;       PC1       PC2       PC3       PC4       PC5 </span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="co">#&gt; 0.3857885 0.2378583 0.1254511 0.1254511 0.1254511</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>scree_fit<span class="sc">$</span>nonprivate<span class="sc">$</span>scree</span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co">#&gt;       PC1       PC2       PC3       PC4       PC5 </span></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="co">#&gt; 37.312574 12.616374  5.206048  5.075826  4.850032</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>scree_fit<span class="sc">$</span>metadata<span class="sc">$</span>privacy</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="co">#&gt; $total</span></span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a><span class="co">#&gt;   eps delta </span></span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="co">#&gt; 6e+00 1e-04 </span></span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a><span class="co">#&gt; $budgets</span></span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a><span class="co">#&gt; $budgets$loading</span></span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a><span class="co">#&gt;   eps delta </span></span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a><span class="co">#&gt; 3e+00 5e-05 </span></span>
+<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a><span class="co">#&gt; $budgets$scree</span></span>
+<span id="cb5-21"><a href="#cb5-21" tabindex="-1"></a><span class="co">#&gt;   eps delta </span></span>
+<span id="cb5-22"><a href="#cb5-22" tabindex="-1"></a><span class="co">#&gt; 3e+00 5e-05 </span></span>
+<span id="cb5-23"><a href="#cb5-23" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb5-24"><a href="#cb5-24" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb5-25"><a href="#cb5-25" tabindex="-1"></a><span class="co">#&gt; attr(,&quot;class&quot;)</span></span>
+<span id="cb5-26"><a href="#cb5-26" tabindex="-1"></a><span class="co">#&gt; [1] &quot;dppca_privacy_control&quot;</span></span></code></pre></div>
+<p>In a default private-only fit (<code>non_private = FALSE</code>),
+<code>scree_fit$nonprivate</code> is <code>NULL</code>;
+<code>scree_fit$clipped</code>, <code>$pmwm</code>, or
+<code>$huber</code> remain top-level method results.</p>
+<p>By default, <code>plot()</code> displays both the PVE and scree plots
+side by side. Because this example was fitted with
+<code>non_private = TRUE</code>, the ordinary PCA reference is included
+automatically; a fit with <code>non_private = FALSE</code> shows only
+private estimates:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">plot</span>(scree_fit)</span></code></pre></div>
+<p><img role="img" aria-label="Private and ordinary PCA PVE and scree plots" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABIAAAAGwCAMAAADmNO5iAAABBVBMVEUAAAAAADoAAGYAOjoAOmYAOpAAZpAAZrY6AAA6AGY6OgA6Ojo6OmY6OpA6ZmY6ZpA6ZrY6kJA6kLY6kNtmAABmADpmOgBmOjpmOmZmZgBmZjpmZmZmZpBmkGZmkLZmkNtmtpBmtrZmtttmtv+QOgCQOjqQZgCQZjqQZmaQZpCQZraQkDqQkGaQkLaQtmaQtraQttuQtv+Q27aQ2/+2ZgC2Zjq2kDq2kGa2kJC2tpC2tra2ttu227a229u22/+2/7a2/9u2///bkDrbkGbbtmbbtpDbtrbbttvb25Db27bb29vb2//b/7bb/9vb////AAD/tmb/25D/27b/29v//7b//9v////Hbta5AAAACXBIWXMAAA7DAAAOwwHHb6hkAAAgAElEQVR4nO2dDXvbRn5vQVm+wjpurEZa5d7IdXZt9cq33d64a2pTO7UaM7K3lncl0hb4/T9K8UqCFEFiMPOfGQzOeZ7NUhSBETE/H8wbgGgOAOCIyPUfAADDBQEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4AwEBgDMQEAA4Y1gCmkYlDw4/r74xevxq0+fyt5OzKHp4U/zm7jiKDpa/zzhq2Cz/8Oj1hj8j+fnfpb4hSNA2N1nVfpO9++SdkeIGkKOBCiit2+drb9REsv72JFoEIPvNi50CKt9tCM6Hk3QX0CPa5mY+i6t3D80UF3yOBiugKK+8e29s/FwWqzJm4yjae99GQNneNgcna0T1PziDom1usqrd5CXN4kLO0eAElOpjPv96ERWvVt442Py5g1ofLHt1sPz9tt0fhB2cQaGQm+jHNCifjjcHpEtxgedomALKe1VZ7S3eqI/z3H970QfL2kIvdgqo2mwZnA/fp+UVHfpxcWI7uL85+Erb3EyqH6ZVYL6cp4l58Oym+OXRb3G0f5kK6vtsnOiy2Gjlh9XiBpCjoQqoGEyuvTGuO2X97UUfbLJ6AmzcfbFZFZwsRzlZOgMJzqBQyE1UDlOXb8TLik+z803RgJoUb47y9svKD+vFhZ+joQqoPLe0bAFVvy17YKotoPGiQ38QTHAGRdvcFGNAo29f3dR/Lqu7NM13tUmu1/PVH9aLG0COhiqg5Why0ds+3zwGVL1d9sHKHtjKKOEyfvc2K4OTffrh5Ty5WAwpBtB3HxRtc7No8UT7eTcpi82rXCNlu+fgZmGVLye14cXih/XihpAjBLRg9RS0+nbZByt7YFsEtLJZGZxx+aGy/RRGcAZF29xkYz7V20dFhWc999k3zz4vF3OkWcr/f5rFYuWHWnGDyRECWtT0aid89e3iRFUFqoWA8s2K4Cy2KscowwjOoGibm5xPf3qU/+LFWk1XI9S1bffer/xQK24wORqqgJZ9+YIH69MQa2/np6/qdLVlDGhlsyI4y6BMqyHFAIIzKNrmpiK5irNGyk4BjV6v/FArbjA5GqqA7s1mNHyuIvv8UX2Wtc1mIZ+5BkXL3NRqNq/qRgFtmm/dWNxiv8HmaKgCKi6paC+grOm9f1IlQElAYfbdB0XL3NSmxMb1Lvvd77NrwyoBVTMZOSs/3C+uIOQcDVNAyW9xywU99beWzWQ1AQU5ezEo2uYmm+jKek35EubyIsLnVcVPav7Yuyw1svLDenEVIedocAJaUs6ntxRQsaSjPL+t7GfD8qHlNllwFuvHipCt7An6QNvc1Go6//1yHVCxnH7RgV+O+mxdB1QSco4GK6DFVc0tBVQs/Dq6t58WAlom58nNYk99D86gaJubfD1P3SfVuqDsp4WAqiWJi8X1yx8WxQ0mRwMV0INni/u6tBXQtHaWUhTQyjU8aY7O0z0d9jw4g6JtbtK6zWs6reqyeotrwQ7La8GqqBRxuNzww8a9h5yjYQkIALwCAQGAMxAQADgDAQGAMxAQADgDAQGAMxAQADgDAQGAMxAQADgDAQGAMxAQADgDAQGAMxAQADgDAQGAMxAQADgDAQGAMxAQADgDAQGAMxAQADgDAQGAMxAQWOX6+tr1nwAegYDAGslF8ZSa0eFn138KeAICAlvM4ujB05/evjmN60/hg0GDgMAW48XD9ya15xDDoOkioK80oEGdu+PF0/ZqL2HYKAno6nEam6u4ej4tgAIICO6jIqBp9sDYaTR69nMcvRD7iyBU6ILBPRQElJyNXqf/ydwzrT0QHaAdszganTIIDXUUBJS3m4vGM01o6ADT8LCOqoCSs60CiiAQDOXrHtsXIrr+1mCKtnlQCdo467lPstbztKkPz6x+IEhW5P1ZVPXcgt+ICCjtw+//9Ols/92HuKkPT4ACQbAit/XfyU8giAho/uW8PE/tN40hEqBAEKjI5OVpzg/x6NvTp5snMchPIMgIKOXT27dvf2meASNAgSBQkXfHtSGCpjFE88WCC8QEZHd34AqJikzO8gWsdMEGgLSAmq7GIECBIFORv8WHNwhoCAgLaD1DzGKEhlBFzk72LxHQABAWUPKxYRyIAAWCVEUmF6M/IKDwYQwItJCryKu4aQRatFiwipyAdqxkVd0d+IlgRX552TAHL1ss2ERGQLuv5SFAgeCoIslPIEithN51S00CFAgICHQQuhZs5/1cCFAgICDQQUJAbe5oR4ACAQGBDr4IiJVBPcUTAZGfnuJJF4y1ieaZlLVwd3y0/WPFZcOvqjeSs813sZz9703nEj8ERH7M41l+FAehd91Sc3V3rI4WYFIe/HYBihZ3724K0GRjY9YLAZEfATzLj+g0PAFSZ+fxSpORJ2FXgIpcXO28ezcCCoq+5Ud0ISIBUmb3AZvs/WveiC4C9OUkbSZf5uenN4+i0Y+1jxW5GO+9T84OJtHeu/QMVrx5d5x2oK8eRdnHk7O0vKNiP48va3+H+a/WBvKjSe/yI3spBvlRpMU/ucner9njSYoATfMmafG0kpUG82qAHsTRw7+nAZrF2e+n6afKFvaLMkCzaj+LP0ToC+6A/OjRv/wIXwtGfnYS7WD982kyZvHDmzxAafU/zxrVD2/SVwc39cmBRRP6IPvUUdGHT89l8zJTe5fZoN5B8cHiTj0f4uXUgh8CIj+76Xl+uBjVK1qdwd7nMxlZgGZFlY9Hr6unlSwDVO4qP7tlv8sHEbNHCpQfun7zMo7KAM3io2rX1R8i8/12QX706F9+EJBftOnD52ec10WA8ibzNAtQNliYnaHy5BxVAXp8Wc1f5P/NkpK1oMs2cxWg6TJt1d8h/D0bID+a9C4/CMgzdnY68tNM2oj+244ALc9GtQBl/xnnz5eMvv23X/52jIBCo2/5QUB9o0jGJPrHtSZ0FaCVj+XUApS2of+cpaZI3qIPXwaxBgIKFc/yg4D6RpGMbPZhdRCxXYBm8WnRgj64yaZOy2592iR/NZ9/OfN0DIhUGcSz/FgREAEySJmMtBO+Oo3aLkBp5IoRxaLNnAUoS2LZhl4uTfNKQATIIJ7lx04LiACZo0pGcU3PbLmQrFWAqpnWfAHaq7w7f5JNwGb7efB8WQoCChXP8oOAYBN+CYgA9Q3PBESA+oZnAiJAPcM3ARGgnoGAQAcEBFr4JiAC1C+8ExAB6hfeCYgA9QoEBFogINDBPwERoF7hn4AIUJ/wUEAEqE94KCAC1CMQUMAkPz8qV30V92jZddPMcqvlIrMWIKBw8So/Nq8FI0BtuN31gfJOCNGhFwEyy/ZiCVALepafDnWabLkpNAHS5XZXgO6Oo+yZAP99Er1ofFLBJgIQEAHaTd/yo1ClycunN8XFI9E/XDZ8BgHpcrsrQdVznbL7alZnsLvjo2kc7Rd3+i1f1W8UfpW+9Q4BDYG+5UehSvPHoU6j6Mmb85bPBdMpbaDc7gpQsrjnwfWyCX13/G1cXNW8fFW7UXh+j6n9k/4LiADtonf5URRQcpbfN7/tk1F1ihsKtztY+3jttr31AEUHN8lf0lpZvlreKPzuePRq/uWsqc424qmACNA9ep4fRQGVD4Vv/Wx4jeIGycbMrNAQoLwvP84qqHq1vFF48WoWI6Dg6V9+lFtAegIiQFtpOGvVaQhQ/uYku9V49Wp5n978LuJBDEK3+sSA6WF+lAQ0+unzVVQ8mqxh9JwASbPsw//25NKDAJmF/EjjW35UZsH+OR+VSptBF3G0fhPq1rsjQJpUsxhFg7TehM6ytXy1vFF40YReOfXtxFsBESBNPMuPWnUmn/7jh8fpH7nfMAlGgORZruM4qg8ifrcYRPxuMYhY3ig8bbo+z+7iG4aACJAenuXH5kpokRKHR7WS9aDeh38Q543T+fJV7Ubh02Cm4dt+BprxKz/2BUSAdPlyHq9dy5M2j6dx9OQybyiXr+a1G4V/OIn2fw1jDKjth6ARr/LTsTK/ftbYHQEyzbJ/rtZTb8ZnAREg0zjMT7e6XJ+GjxbIlQnNICDQoXcCSj7+0nUavnuh0MjABESADNM7AenujgCZZWgCIkBm6ZOArq+33I0DAYUCAgIdZASUrUDMF0ceNoxBE6BQ8FxABMhzRCpyFkcPnv709s1p3PV2HN3KBfuI1Y+RFrTSJ8EBIiIYl4u4NW7H0alcsI9I/ZhrQRMgzxG7Idm9l113R4C8RqJ6TLagCZDfICDQQqJ6TLagFT8LlvG+C0Z+/EagdsyewAiQ10gNQo9OjTWhCZDP9EBABMhjfJ+GVy4a7NKDLhgJ8hjPFyJ2LBusITQIbbIFTYA8xvNLMWQKB3N4Pw3f5eNgDQQEWni/ELHb58ES/RAQ+fEWyZq5fzMptdu51Dc09CeBYXoiIALkKzJdsI9vP+d3BNW5p7jmBmAFBARaSFTM3UkUjf54PHp2HpsZhO62BVigLwIiP54iMw3/3fU4nwCbmpmG77YFWKA3AiJAfiK1EHEWZ8+dMrMQsfMmIA4CAi2kBFQ8+M6kgEiQj/RHQOTHSwRqJTlbjPxoPNrbzDYgDAICLSRqpdJOchGNOj/a29RGIEqPBER+fESkUq5+l3e89B7tbWwrEKRPAiI/HuKoThBQICAg0KJLnXz809O//9V+sd03AzF6JSDy4x/qVXIVR9Hefx03jC6LFau3HQjRLwGRH+9QrpFptP+fx3vvl/f8sVOs5nYgBAICLVRrJJtjz1b3FAsNrRWrvyGI0DMBkR/fUK2QTD7V/ywWa2JLEKBvAiI/noGAQAcEBFoo18c4epHJp/EyU6FijWwKxhEV0P0bSmntTndLEEC5Ombx6Nt49E+NN9oQKtbIpmAcSQFta2UjoEBQr47ZSXZHw8Y1zlLFmtkWDCMhoOTlac4P6bnu9Km5iwn1NwXjdKmN5NO75raxXLFmNgajSAjo7nh5697I4O0UTGwLhunVpRgmNgajiHTBkrPR87lUF4z8eIVyZXy9LtFqBOllgAR5g9AY0G/x4Y2YgMiPR6hPw+9oG8sUa3ZzMIbUIPTsZP9STEDkxx+UV0J/fJvy5ofRs1+crIQ2sjkYQ2wWLLkY/QEBhU/Xqpg03WpMtlhT24MhBKfhr+ItrWzOYIHQtSbu9C6H1w4ACfIDyXVAX142zMF3253R7cEQ3QXkcgyIAPlC7y7FMLQ9GKJjRSR/abrdvGixRvcABpAWUNPVGJzBAqH7LJjTMSAzuwBthAW03tBeLlDstDv9PwgMozw5US6Tf/rOarEyuwBthAWUfGyYbL23u1vVXZMfL+jjSmiD+wBNfBkDur3FQL2kxwIiQR4gJ6Dr62uF3SGgnqJSCysXCTpdCW1wJ6CFjICSizjP2Oiw6YKftd3d3mKgfqJ0jWA5/lOOArmdBTO3F9BARECzOHrw9Ke3b07jqOm2UyYERH48oM9dMBLkHhEBLR+5Mmm68ebq7m5vaQL1FAQEOsjcD2jRvW9c72pEQOTHPR2q4Pptfj3qU+djQAb3Ax3xQkC3txioryjXwCz2ZhDa6I6gE350wTpDfFyjXAPj6HE8+vb7xtFBoWLFdwSdkBqEHp0qDUJ3hvw4Rv1SjNHrcZqKiZtHM0vuCTrgyTT8EtVuGPlxi7qA9t5PohdzV49mFt0VKOPLQsQliiNBxMctXQQ0TVs/rm/HIbIrUMaXSzHqqCmI/DhFfQxo9HoWH6QtIF8ERIJc4qOA1PphxMcpyod/Gu39ehb945mzRzML7wyUUBJQ/dr2ZMvtDvXLVWkEER+XqB/9q9+9zx6Ouq/TAEJAoaAkoKLffvf94/fyt9TEQP3A8I3qhIu1sjdQoIuAav8VLLd9I4j4OETpavj/d+miWPu7g9b4KyAFBREfdyjejuPBc52Oe7di7e8OWuOzgNr3w8iPM5QO/YeTKIqemGgGma5xEuQIvwXUthFEfJyheOiTnx9FJppBxmucCLnBcwG1VRDxcYX6kf+aLZPXbQYhoEDwXkAt+2HkxxGdDvyn86wZZL1Yy3uEFqgK6N319afqv7ZWsrZpBBEfR3Q98B+8uRRDbI/QAkUBObqpeAsFkR83dDvuH76Pood+CYgEOUFxJfTbGg1P/DJcbgkG8pQOh/3Luf4gkERtkyAH+Hkt2AZ2NoKIjxNUD/vXn2MT02AIKBDUumBOV7JiIB9Ru0+UwkKgrrdz0YAE2Ud1DMjlStYdjSDi4wLFldDtAqRxQzstiJB11LpgrleyblcQ8XGAmoDaZUf9uXKGIEHWUR0Dcr2SFQN5hsQxt/dQA0u7hUY6DEK3X8m65Z4LnWt6WyOI+NhH4JirP1fOHETIMt1mwXatZE0+vv2cPwBqv+nZKxoVvUVBxMc6CAh06DwNv20l691JFI3+eDx6dh6L9OExkD+E1QUjQbbpKKDtK1nH0XfX43z8cCoToMZGEPGxjcQRt/hcOZt7hg10EdCulax5u7l47pNYE7pJQcTHMiIH3NU0vOyeYQPKAmqxkjW3zt2xqIAa+2Hkxy5djvfHPz39+193fcjBQkTxXcM91ATUbiVrcrZoOE+jhudfGqjlzY0g4mMX9eN9lZ7B9v7ruNODUZeXQnfYuHUhgvuGNZSvhm+zBqjSTnIRjV5olrsNDOQe5cM9jfb/M20Xj7c9G/7L+TePX2UvrM+CSe8b1lAUUMtV0Fe/y2NzdywxDV9jUyOI+FhF9XBnzeNMK9ueDZ8NQsfRoWwXfgtEyB69uRq+gQ0KIj42UT3amVKq/zV9Jm8dXWUTqG4ERITsoSqgDy9Pn76zWe5OMJBTBARU/uoq1RACCh3FQeizfABQYfyw6WoMg1V8rxFEfCyifLDH0YtMK40rxJbNnknxSTPFqkGEbKEmoEn08HL+5Wzb+OEq6wGSmcVYVxDxsYfysZ7Fo2/j0T81rpHPT3Mviv8f/dmRgIiQLZQEVM6vbxs/XCP52HDjVsMVjIFcoX6oZ9lSjuarBOfZRNnoWRab7JIeBBQ2irNgeRw0n8ijVm5LVhtBxMcaXQ518uld830SMq7iImHJuSsBESFLyAnI9krWFQURH1sIH+nETgvaSQkwlxKQm2t5MJADxC7FMF+sbyXAXEhArm6pWWsEER9L2L0UQ6NYH4sAZQG9u64ejXrd3I13dz8XDGQbkUsxBIr1tIzBo3wtWIsno7q8o92yEUR8rCBxKYZAsb6WMXjUpuHbPRnVpYCWCiI+VpC4FEOgWH8LGTgi14K5vKXmfNEPIz42CFlAREgeEQE5vaXmvGoEkR4bCFyKIVKsx6UMGpmr4V3eUjMnVxDxsYDApRgixXpdzICRux2Hs1tqFmAgO0hciiFSrN/lDJa+3w+ombQRRHrkUT7GHz/vvhRDoFjPyxks4QooUxDxEafLILSDYv0vaKCELKBUQcRHmtAFhIFkCVtAW58kDyZQXwkd/y/d/leXYntQ0iAJXEDzCAPJotwC+j7etZJeoth+FDVAQhdQaiAUJInypRgvT0ue+n4phv2iBkj4AqIfJoqjf542i8VAggQvoLwkDCTGAASEgQQZhoBoBInRsSITzYFoBBQI4QuoLAoFyaBckclFNvp85/8NyZyVNigGIKCqrMpAmMgkyhU5yR8rl1z04WJUV8UNiAEJqOSWtpBJ1BciFleh9uJ2HK6KGxBDENBqYQjIKF1XQvdLQBhIikEIqF7a7S0GMonyOqDysadTlQd86xerDQaSAQGBFuqXYkTRtz+9+SEqPGStWF0QkAzDENCyuNtbDGQU9Yr88Ci/H9Ary8XqgoFEGIiAFuUhIMN0qcjk+lprDr5jsf0rcgAMTEC3txjILENYCe2syAEwFAERHyFUj+tfs7bPh9NTvR6Yk+okQgIMRkAbSqQdZAC1iryKs8n3i2wQ6NBisYbAQOaREdCX828e56c4Bw8mbGJTiShIG6WKnMWjH2/m0+jg5stxz2bBnBUaOCICyp4LFkeHN14JaHORKEgTpYoc59YZZ2uh+7YOyGGpQSMioPzJqFfZxT7eCwgFaaJSkdlz4bP/Ptx2ajJfLHiMhIDKbF2lGvJJQI1loiANVCqySMMsPpgjICgQFNB8UjyEV3d35mgsFAV1Rl1A07wfNosREMgIqLrcJ21x/7kfAkJBnVHrgmXByIeA0rNTn27HAVKIjAFNo9GzbITx7qTx2Qf+DSKyOrETShU5jfbffch7YLO4h7NgRckR8jOIzDT8Vdm+Ts79EtAOUJA6ahV5UTyO5+6sl+uA8oIjDGQS6YWIyS+bJ1s9rUMUpIpiRX56+0s+BaZ5Ler9Yi1VXPlMMzuFDYHhrIRuCQpSw5NrwWx1oBGQYaQF9LXh6QceVyEKUgEBgQ7CAlqfho8WdNqdCVqUjYLa44eA7N3hAP+YRVhAyUffxoDaBQgFtWVoAmIWzCxDGwNq3f5iVr4dXgjIzU2eMJEB5AR0fX1tcneGUOkAoqAWDFhAKMgAMgJKLuL83/nosOkJvH0QEApqgQ8CcnifSxSkidTtOB48/entm9M4Kp5Cp7c7oygOIqKgHfggoBVs1xgK0kLudhw5jVf8eD0LtgIK2opYRXbvwttuC6EgDSSvhp/7dT+ge7QNDgragkhF6nfh7ToIBXVmyAJCQQaQqEgzXXirDSEU1JHhdcFWaa8gHLQRiYo0lx+L1cb6oE5IDUKPTj0dhL4HU2JaCFSk2Ra0xYYQClJnaNPwm0BBGngvoAyLy6TtlBMOQ1uIuBkU1Bm/u2BLbDWEUJAaQ7sUowkU1BGhQWiRLrwdB6EgFRBQBQrqhKfT8E1YaQihoPYgoCUKCsJBFR4uRNyFhepDQW1BQHXa5wYFlditSFP3k5JvCDEr3w4EtAoKUsS7a8FaY8FBsvsPAgS0DtfKK9FfAc3lG0IoaCcIaAMoqD0CFZm8PF3yVPqOmrISQkE7QEAbQUFtkRDQxXKox85z5SQdhIK2goAaQEHtEKnIyc7HphovVrAhhIK2gIAaYVa+DTIVOW5o+MgWK1aRKKgRBLQFpsR2I1ORd8dH2z8glR+phhCz8g0goK2goF30ehZsM2IOkthr30FAO0BB2wlQQHOphhAKug8C2gkK2kaYAsqQcBAKWgcBtQAFNROugOYiDSEUtAoCakW35dHWbGRPe/dKClpAGfccpHuwUVAdBNQWdQXZm563WNB6ScELaL7WEDJQq0yJLUFA7VGNjTUB2TTdEAWUYfi0goJKEJAKSrGx97BgqwWtlTQUAVUYq1UUlIOA1FCIjTUB2TXdsAVk8iH0KGiOgNRReJLYIqq3QtRLmsuXtFJqdTiMHFRlQhAQCpojoC60i43ZqPpQEAKarwjZxEEfvIIkBGT3fi4uaBGb1baDJNYLWilpWAJax8BxH7iCRARk/X4u9hl4bJYMW0AZ2vYf9Ky8TBfMwf1crDPk1NRAQDmaFhpumITGgNzcz8Uyw01NDQS0REdCQw2TkICc3c/FLoNuPBcgoFW6N4WGmSVmwTQZZmyWIKANdJTQELOEgLQZYmyWIKAGOjWFhpclBGSA4cVmCQLahrqEhpYlaQF9/Wx0d74ytNgsQUC7UG0KDStLwgK6O16dDjP1bG//CO8btQMBtaJLhyzAfyX3ERZQ8vGXEFdCb2QIcbkPAmqPmoTsnaddmo4xIIMMUUEISI3WTSF7PQWLPZL7BckJ6Pr62uTu+sHwFISAOtBGQnUBRQoo/zEWx0Q2FCQjoOQizssaHTaMQfc8QFsYmoIQUEd2NYU0fdJeVisFWVediIBmcfTg6U9v35zG0ei1/u56xrAUhIB02CYhW+2Szi0gPdVVO2ldmsJfNo6qCzEm0YH+7vqKnfw4BgHp0tgUspUfW6azJqDa3Pv6NHyX3fUVa/Xaj1mMIIoVY6OFbD1qILq1NgZ9a2MMCAFldG7ZdivJQjlzrVkMswSZnzUJ2bnNpc2CdJ6qQhdMkQ2d3/a95a4FCbOhIARklto/UQTU6YPzfBB6dDrYQegSTZ+0l9VKQdZVh4CksHWn7548VYVpeFVstUs6t4D0VFftxMRXUCf8/Gx4HIlx6iXN5UtaKbWEhYhy2PFPX2YxDP8pboq1yKZ/rf0uyLKArO5u2NgyHWNA9lhrpVgoyVpB3Z6qgoCAWTAwDQICLRAQ6ICAQAsEBDogINACAYEOCAi0QECgAwICLRAQ6ICAQAsEBDogINACAYEOCAi0QECgAwICLRAQ6ICAQAsEBDogINACAYEOCAi0QECgAwICLRAQ6ICAQAsEBDogINACAYEOzgQEgWA2F+RnaLSucck4Wdh/0CUF+JVUCfEQkB8jW/qx/6BLCvArqRLiISA/Rrb0Y/9BlxTgV1IlxENAfoxs6cf+gy4pwK+kSoiHgPwY2dKP/QddUoBfSZUQDwH5MbKlH/sPuqQAv5IqIR4C8mNkSz/2H3RJAX4lVUI8BOTHyJZ+7D/okgL8SqqEeAjIj5Et/dh/0CUF+JVUCfEQkB8jWwIAaIKAAMAZCAgAnIGAAMAZCAgAnIGAAMAZCAgAnIGAAMAZCAgAnIGAAMAZCAgAnIGAAMAZ0gIaHwgXUPDhURTtX9oo6Sot6cmNjZLm87tjK0dvnD/G4MhGUcqQHw36kB9hAU0iK4dgmh+C0Wv5kiZ5SXvv5UuaZzVr4+glZ/4KiPzo0If8iAoouYgsHYLRq3nyFwtl3R0/vMy+1gvxkuZ5WG0cvVls5dt0gPxo0Yv8SAro7nj0ByuNwFmc6Tc5e2ipaVuUJ1/KH60cvamNM38XyI9mKX3Ij6iA/uXGUi80JzmzVFYytvFPNj10do7eZO//x9G+hxIiPzr0JD/CY0A2AzSx07BNu7yjf7dQzvihpX9+xRiinXl/ajMAAAPNSURBVIOnCvnpTE/yE46AruyMV87vfv/IxnBl1rC1cvTyAZD06NnqfyhBfrrSl/yEIqDkwuK/oC/H4mXlwwQ2z/9WugXKkJ+O9CY/gQgobdfanEaeiP9rLaZr7UwNFwUOWkDkR7vAQQvo7mT03EY56Ykl/z4hBaickhlbWpuiBvnpSG/yE4aArPUf0jPlc3sDJrb68M/nVhbBdID86NCH/AQhoFkc2VpgOo0tNmztHD17y4DVIT869CE/QQhoGlkL0Hx2EkWPrVw1ZO38n32lf7D0lRQhPzr0IT9cDQ8AzkBAAOAMBAQAzkBAAOAMBAQAzkBAAOAMBAQAzkBAAOAMBAQAzkBAAOAMBAQAzkBAAOAMBAQAzkBAAOAMBAQAzkBAAOAMBAQAzkBAAOAMBAQAzkBAAOAMBAQAzkBAAOAMBAQAzkBAAOAMBAQAzkBAGR++j8SeV/lVZK/gE+SnMwhoPk/OykfzHgns/LffWXjeL7iE/GiAgObzcbT/Lo3RVTx6LbBzGw8cB5eQHw0Q0HwaPbwpXxyY33voAQLyowMCmo+rE1fyH+mJbP7lPI6iJ1l/fvzw7+fR6Md5ch5FhzdZFn69qLr6i08lZw//+yT7VP5mFI2e3dTezFvnArEEfyA/OiCgtLJvaj/O4rw7n513xg//b/by+VnZvx/v/Z/sVZa35aeqAYCjxZsHy1GBo/ADNHjIjxYI6O54pYLH2ckquchqfRw9vJx/iLP/XmXN7HE0erX4VfWpNCIHN/NJ8eZ3+ZsvVt4MvAk9eMiPFghoNUB3x/n5LDlL6z1vW+evitNc0dbO3qh9qvh99sYszneUnB3Ml28GH6DBQ360QECrTehZXMylTtKwjBfRKQNUZCH9Ve1Ty9+XLegoPdnd3whChfxogYCWg4jZKxMByk5rgwkQkB8dEFB60ipPYdmLlSb0eoA2N6GXAVosRBtQgID86ICA8oVkr9Lq/jmOXqwOIq4HKNq/3DCIWP0+ORv9mL68ig/upw4ChvxogIDWltKXDeGs2u+fwR5VM6zLT9V+v/HNSeDTqEB+dEBA82wV/TfZxYTv8h/y1WCHn+cbArT3a/q7Jzcrn6r9Pn+zWl1WvXl3Ui2UhVAhP91BQO0JvTsOspCfDSCg9hAg0IH8bAABtYcAgQ7kZwMIqD0ECHQgPxtAQADgDAQEAM5AQADgDAQEAM5AQADgDAQEAM5AQADgDAQEAM5AQADgDAQEAM5AQADgDAQEAM5AQADgDAQEAM5AQADgDAQEAM5AQADgDAQEAM5AQADgDAQEAM74H9Mh7V17iY/MAAAAAElFTkSuQmCC" alt="Private and ordinary PCA PVE and scree plots" width="100%" style="display: block; margin: auto;" /></p>
+<p>To display only one view, use <code>type</code>.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">plot</span>(scree_fit, <span class="at">type =</span> <span class="st">&quot;pve&quot;</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="fu">plot</span>(scree_fit, <span class="at">type =</span> <span class="st">&quot;scree&quot;</span>)</span></code></pre></div>
+<style>
+.scree-plot-table table {
+width: 100%;
+table-layout: fixed;
+}
+.scree-plot-table colgroup col:first-child {
+width: 15% !important;
+}
+.scree-plot-table colgroup col:nth-child(2) {
+width: 85% !important;
+}
+</style>
+<div class="scree-plot-table">
+<table>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Plot type</th>
+<th align="left">What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>&quot;pve&quot;</code></td>
+<td align="left">Each component’s share of the estimated variation among
+the <code>k</code> fitted PCs.</td>
+</tr>
+<tr class="even">
+<td align="left"><code>&quot;scree&quot;</code></td>
+<td align="left">Estimated variation along each private PC direction, on
+its original scale.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="choose-a-method-and-its-tuning-parameters" class="section level2">
+<h2>4. Choose a method and its tuning parameters</h2>
+<p>The three scree estimators use the same projected paired differences,
+but differ in how they estimate their means. The tables below map the
+symbols used in <a href="method-dp-scree.html">DP Scree
+Methodology</a>** to the R arguments of each method-specific control
+function.</p>
+<div id="clipped-control" class="section level3">
+<h3>Clipped mean</h3>
+<p>Clipped estimation limits each squared pair difference before
+releasing a noisy mean. See <a href="method-dp-scree.html#clipped-mean">Clipped Mean
+Methodology</a>.</p>
+<style>
+.clipped-parameter-table table {width: 100%; table-layout: fixed;}
+.clipped-parameter-table colgroup col:nth-child(1) {width: 20% !important;}
+.clipped-parameter-table colgroup col:nth-child(2) {width: 20% !important;}
+.clipped-parameter-table colgroup col:nth-child(3) {width: 60% !important;}
+</style>
+<div class="clipped-parameter-table">
+<table>
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Theory notation</th>
+<th align="left">R argument</th>
+<th align="left">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><span class="math inline">\(C_{\mathrm{clip}}\)</span></td>
+<td align="left"><code>C_clip</code></td>
+<td align="left">Positive upper clipping threshold; controls the
+bias–noise tradeoff (required, no default).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The setting used in Section 2 is:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>clipped_set <span class="ot">&lt;-</span> <span class="fu">clipped_control</span>(<span class="at">C_clip =</span> <span class="dv">20</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>clipped_set</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="co">#&gt; $C_clip</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="co">#&gt; [1] 20</span></span></code></pre></div>
+<p>A smaller <code>C_clip</code> reduces sensitivity and Gaussian noise,
+but can truncate more large paired differences. A larger value reduces
+clipping bias while requiring more privacy noise.</p>
+</div>
+<div id="pmwm-control" class="section level3">
+<h3>Private modified winsorized mean (PMWM)</h3>
+<p>PMWM privately estimates lower and upper cutoffs and then computes a
+noisy winsorized mean. See <a href="method-dp-scree.html#pmwm">PMWM
+Methodology</a>.</p>
+<style>
+.pmwm-parameter-table table {width: 100%;table-layout: fixed;}
+.pmwm-parameter-table colgroup col:nth-child(1) {width: 20% !important;}
+.pmwm-parameter-table colgroup col:nth-child(2) {width: 20% !important;}
+.pmwm-parameter-table colgroup col:nth-child(3) {width: 60% !important;}
+</style>
+<div class="pmwm-parameter-table">
+<table>
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Theory notation</th>
+<th align="left">R argument</th>
+<th align="left">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><span class="math inline">\(a,b\)</span></td>
+<td align="left"><code>a</code>, <code>b</code></td>
+<td align="left">Public lower and upper bounds for the <strong>estimated
+cutoffs</strong>, with <span class="math inline">\(a&lt;b\)</span>
+(required).</td>
+</tr>
+<tr class="even">
+<td align="left"><span class="math inline">\(c_{\mathrm{trim}}\)</span></td>
+<td align="left"><code>trim_const</code></td>
+<td align="left">Positive baseline trimming constant in the quantile
+level (required).</td>
+</tr>
+<tr class="odd">
+<td align="left"><span class="math inline">\(\eta_{\mathrm{trim}}\)</span></td>
+<td align="left"><code>eta</code></td>
+<td align="left">Lower-bound tuning value for the trimming proportion,
+in <span class="math inline">\([0,0.5)\)</span> (required).</td>
+</tr>
+<tr class="even">
+<td align="left"><span class="math inline">\(\beta\)</span></td>
+<td align="left"><code>beta</code></td>
+<td align="left">Geometric quantile-search grid base, greater than 1
+(default: <code>1.001</code>).</td>
+</tr>
+<tr class="odd">
+<td align="left"><span class="math inline">\(I_Q,I_M\)</span></td>
+<td align="left"><code>split_mode</code></td>
+<td align="left"><code>FALSE</code>: reuse all pair rows in both stages
+(default); <code>TRUE</code>: use disjoint quantile and mean
+subsets.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>For example, to use PMWM instead of the clipped estimator:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>pmwm_set <span class="ot">&lt;-</span> <span class="fu">pmwm_control</span>(</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>  <span class="at">a =</span> <span class="dv">0</span>,</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>  <span class="at">b =</span> <span class="dv">50</span>,</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>  <span class="at">trim_const =</span> <span class="dv">10</span>,</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a>  <span class="at">eta =</span> <span class="fl">0.01</span></span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>pmwm_fit <span class="ot">&lt;-</span> <span class="fu">dp_scree</span>(</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>  X,</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="at">k =</span> <span class="dv">5</span>,</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  <span class="at">privacy =</span> scree_privacy,</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;pmwm&quot;</span>,</span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a>  <span class="at">control =</span> pmwm_set,</span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a>  <span class="at">non_private =</span> <span class="cn">TRUE</span></span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a>)</span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a><span class="fu">summary</span>(pmwm_fit)</span>
+<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="fu">plot</span>(pmwm_fit, <span class="at">type =</span> <span class="st">&quot;pve&quot;</span>)</span></code></pre></div>
+</div>
+<div id="huber-control" class="section level3">
+<h3>Huber mean</h3>
+<p>The Huber method privately estimates a scale for each PC and uses
+thatscale to set a Huber threshold for noisy gradient descent. See <a href="method-dp-scree.html#huber-mean">Huber Mean Methodology</a>.</p>
+<style>
+.huber-parameter-table table {width: 100%;table-layout: fixed;}
+.huber-parameter-table colgroup col:nth-child(1) {width: 20% !important;}
+.huber-parameter-table colgroup col:nth-child(2) {width: 20% !important;}
+.huber-parameter-table colgroup col:nth-child(3) {width: 60% !important;}
+</style>
+<div class="huber-parameter-table">
+<table>
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Theory notation</th>
+<th align="left">R argument</th>
+<th align="left">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><span class="math inline">\(r_{\min},r_{\max}\)</span></td>
+<td align="left"><code>k_min_m2</code>, <code>k_max_m2</code></td>
+<td align="left">Integer limits for the dyadic scale candidates <span class="math inline">\(2^r\)</span>, with <span class="math inline">\(r_{\min}&lt;r_{\max}\)</span> (required).</td>
+</tr>
+<tr class="even">
+<td align="left"><span class="math inline">\(\rho\)</span></td>
+<td align="left"><code>m2_frac</code></td>
+<td align="left">Fraction of scree epsilon used for private scale
+estimation, in <span class="math inline">\((0,1)\)</span>
+(required).</td>
+</tr>
+<tr class="odd">
+<td align="left"><span class="math inline">\(\mu_0\)</span></td>
+<td align="left"><code>mu0</code></td>
+<td align="left">Public initial mean iterate (default:
+<code>0</code>).</td>
+</tr>
+<tr class="even">
+<td align="left"><span class="math inline">\(\eta_0\)</span></td>
+<td align="left"><code>eta0</code></td>
+<td align="left">Positive gradient-descent step size (default:
+<code>1</code>).</td>
+</tr>
+<tr class="odd">
+<td align="left"><span class="math inline">\(T\)</span></td>
+<td align="left"><code>T</code></td>
+<td align="left">Number of noisy gradient steps (default:
+<code>ceiling(log(m))</code>).</td>
+</tr>
+<tr class="even">
+<td align="left"><span class="math inline">\(M\)</span></td>
+<td align="left"><code>M</code></td>
+<td align="left">Number of blocks for private scale estimation (default:
+<code>floor(sqrt(m / 2))</code>, capped by available pairs).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>When <code>T</code> or <code>M</code> is left as <code>NULL</code>,
+the corresponding sample-size-based default is used.</p>
+<p>For example:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>huber_set <span class="ot">&lt;-</span> <span class="fu">huber_control</span>(</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  <span class="at">k_min_m2 =</span> <span class="sc">-</span><span class="dv">10</span>,</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  <span class="at">k_max_m2 =</span> <span class="dv">10</span>,</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>  <span class="at">m2_frac =</span> <span class="fl">0.25</span></span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>huber_fit <span class="ot">&lt;-</span> <span class="fu">dp_scree</span>(</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>  X,</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>  <span class="at">k =</span> <span class="dv">5</span>,</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>  <span class="at">privacy =</span> scree_privacy,</span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;huber&quot;</span>,</span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a>  <span class="at">control =</span> huber_set,</span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a>  <span class="at">non_private =</span> <span class="cn">TRUE</span></span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a>)</span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a></span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a><span class="fu">summary</span>(huber_fit)</span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a><span class="fu">plot</span>(huber_fit, <span class="at">type =</span> <span class="st">&quot;pve&quot;</span>)</span></code></pre></div>
+</div>
+</div>
+<div id="compare-multiple-methods-and-account-for-releases" class="section level2">
+<h2>5. Compare multiple methods and account for releases</h2>
+<p>To fit several methods using one private direction estimate, provide
+a vector of method names and a named list of their corresponding
+controls:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>scree_comparison <span class="ot">&lt;-</span> <span class="fu">dp_scree</span>(</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>  X,</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>  <span class="at">k =</span> <span class="dv">5</span>,</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>  <span class="at">privacy =</span> scree_privacy,</span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a>  <span class="at">method =</span> <span class="fu">c</span>(<span class="st">&quot;clipped&quot;</span>, <span class="st">&quot;pmwm&quot;</span>, <span class="st">&quot;huber&quot;</span>),</span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">list</span>(</span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a>    <span class="at">clipped =</span> clipped_set,</span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a>    <span class="at">pmwm =</span> pmwm_set,</span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a>    <span class="at">huber =</span> huber_set</span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a>  ),</span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a>  <span class="at">non_private =</span> <span class="cn">TRUE</span></span>
+<span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a>)</span>
+<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a></span>
+<span id="cb13-15"><a href="#cb13-15" tabindex="-1"></a><span class="fu">summary</span>(scree_comparison)</span>
+<span id="cb13-16"><a href="#cb13-16" tabindex="-1"></a><span class="co">#&gt; DP Scree Estimates Summary</span></span>
+<span id="cb13-17"><a href="#cb13-17" tabindex="-1"></a><span class="co">#&gt; Data: 1000 observations x 20 variables</span></span>
+<span id="cb13-18"><a href="#cb13-18" tabindex="-1"></a><span class="co">#&gt; Components: 20 PC directions; 5 scree estimates</span></span>
+<span id="cb13-19"><a href="#cb13-19" tabindex="-1"></a><span class="co">#&gt; Methods: scree = clipped, pmwm, huber </span></span>
+<span id="cb13-20"><a href="#cb13-20" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-21"><a href="#cb13-21" tabindex="-1"></a><span class="co">#&gt; DP component importance (clipped):</span></span>
+<span id="cb13-22"><a href="#cb13-22" tabindex="-1"></a><span class="co">#&gt;                    PC1    PC2    PC3    PC4    PC5</span></span>
+<span id="cb13-23"><a href="#cb13-23" tabindex="-1"></a><span class="co">#&gt; Eigenvalue     12.0624 7.4371 3.9225 3.9225 3.9225</span></span>
+<span id="cb13-24"><a href="#cb13-24" tabindex="-1"></a><span class="co">#&gt; PVE             0.3858 0.2379 0.1255 0.1255 0.1255</span></span>
+<span id="cb13-25"><a href="#cb13-25" tabindex="-1"></a><span class="co">#&gt; Cumulative PVE  0.3858 0.6236 0.7491 0.8745 1.0000</span></span>
+<span id="cb13-26"><a href="#cb13-26" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-27"><a href="#cb13-27" tabindex="-1"></a><span class="co">#&gt; DP component importance (pmwm):</span></span>
+<span id="cb13-28"><a href="#cb13-28" tabindex="-1"></a><span class="co">#&gt;                    PC1    PC2     PC3     PC4     PC5</span></span>
+<span id="cb13-29"><a href="#cb13-29" tabindex="-1"></a><span class="co">#&gt; Eigenvalue     22.6834 8.5897 2.80526 2.80526 2.80526</span></span>
+<span id="cb13-30"><a href="#cb13-30" tabindex="-1"></a><span class="co">#&gt; PVE             0.5715 0.2164 0.07068 0.07068 0.07068</span></span>
+<span id="cb13-31"><a href="#cb13-31" tabindex="-1"></a><span class="co">#&gt; Cumulative PVE  0.5715 0.7880 0.85864 0.92932 1.00000</span></span>
+<span id="cb13-32"><a href="#cb13-32" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-33"><a href="#cb13-33" tabindex="-1"></a><span class="co">#&gt; DP component importance (huber):</span></span>
+<span id="cb13-34"><a href="#cb13-34" tabindex="-1"></a><span class="co">#&gt;                    PC1     PC2     PC3     PC4     PC5</span></span>
+<span id="cb13-35"><a href="#cb13-35" tabindex="-1"></a><span class="co">#&gt; Eigenvalue     18.5145 2.22032 2.22032 2.22032 2.22032</span></span>
+<span id="cb13-36"><a href="#cb13-36" tabindex="-1"></a><span class="co">#&gt; PVE             0.6758 0.08105 0.08105 0.08105 0.08105</span></span>
+<span id="cb13-37"><a href="#cb13-37" tabindex="-1"></a><span class="co">#&gt; Cumulative PVE  0.6758 0.75686 0.83791 0.91895 1.00000</span></span>
+<span id="cb13-38"><a href="#cb13-38" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-39"><a href="#cb13-39" tabindex="-1"></a><span class="co">#&gt; Proportions are normalized over 5 estimated components.</span></span>
+<span id="cb13-40"><a href="#cb13-40" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-41"><a href="#cb13-41" tabindex="-1"></a><span class="co">#&gt; Allocated privacy budget (per method):</span></span>
+<span id="cb13-42"><a href="#cb13-42" tabindex="-1"></a><span class="co">#&gt;         eps delta</span></span>
+<span id="cb13-43"><a href="#cb13-43" tabindex="-1"></a><span class="co">#&gt; Loading   3 5e-05</span></span>
+<span id="cb13-44"><a href="#cb13-44" tabindex="-1"></a><span class="co">#&gt; Scree     3 5e-05</span></span>
+<span id="cb13-45"><a href="#cb13-45" tabindex="-1"></a><span class="co">#&gt; Total     6 1e-04</span></span>
+<span id="cb13-46"><a href="#cb13-46" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-47"><a href="#cb13-47" tabindex="-1"></a><span class="co">#&gt; All scree methods use the same privately estimated PC directions.</span></span>
+<span id="cb13-48"><a href="#cb13-48" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-49"><a href="#cb13-49" tabindex="-1"></a><span class="co">#&gt; Non-private reference: included</span></span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="fu">plot</span>(scree_comparison, <span class="at">type =</span> <span class="st">&quot;pve&quot;</span>)</span></code></pre></div>
+<p><img role="img" aria-label="PVE comparison of clipped, PMWM, Huber, and ordinary PCA" src="data:image/png;base64,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" alt="PVE comparison of clipped, PMWM, Huber, and ordinary PCA" style="display: block; margin: auto;" /></p>
+<p>Within a call, all methods share a single private direction estimate
+but independently compute their scree estimates using the full scree
+privacy budget.</p>
+</div>
+<div id="reusing-private-pc-directions" class="section level2">
+<h2>6. Reusing Private PC Directions</h2>
+<p>When supplying previously estimated directions through
+<code>V_dp</code>, specify the actual privacy budget used to estimate
+those directions as the <code>loading</code> allocation. This records
+the previously incurred privacy cost without spending the loading budget
+again.</p>
+<p>There are two ways to specify the privacy allocation.</p>
+<p><strong>Option 1: Specify component budgets directly.</strong></p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="co"># Estimate private PC directions.</span></span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>loading_fit <span class="ot">&lt;-</span> <span class="fu">dp_loading</span>(</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a>  X,</span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a>  <span class="at">eps =</span> <span class="dv">3</span>,</span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a>  <span class="at">delta =</span> <span class="fl">5e-5</span></span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>)</span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a></span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a><span class="co"># Specify the actual loading budget and the scree budget.</span></span>
+<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a>reuse_privacy <span class="ot">&lt;-</span> <span class="fu">privacy_control</span>(</span>
+<span id="cb15-10"><a href="#cb15-10" tabindex="-1"></a>  <span class="at">loading =</span> <span class="fu">c</span>(<span class="at">eps =</span> <span class="dv">3</span>, <span class="at">delta =</span> <span class="fl">5e-5</span>),</span>
+<span id="cb15-11"><a href="#cb15-11" tabindex="-1"></a>  <span class="at">scree   =</span> <span class="fu">c</span>(<span class="at">eps =</span> <span class="dv">3</span>, <span class="at">delta =</span> <span class="fl">5e-5</span>)</span>
+<span id="cb15-12"><a href="#cb15-12" tabindex="-1"></a>)</span></code></pre></div>
+<p><strong>Option 2: Specify a total budget and allocation
+proportions.</strong></p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>reuse_privacy <span class="ot">&lt;-</span> <span class="fu">privacy_control</span>(</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>  <span class="at">eps =</span> <span class="dv">6</span>,</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>  <span class="at">delta =</span> <span class="fl">1e-4</span>,</span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="at">split =</span> <span class="fu">c</span>(<span class="at">loading =</span> <span class="fl">0.5</span>, <span class="at">scree =</span> <span class="fl">0.5</span>)</span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>)</span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a></span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="co"># Estimate private PC directions using the allocated loading budget.</span></span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a>loading_budget <span class="ot">&lt;-</span> reuse_privacy<span class="sc">$</span>components<span class="sc">$</span>loading</span>
+<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a></span>
+<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a>loading_fit <span class="ot">&lt;-</span> <span class="fu">dp_loading</span>(</span>
+<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a>  X,</span>
+<span id="cb16-12"><a href="#cb16-12" tabindex="-1"></a>  <span class="at">eps =</span> loading_budget[[<span class="st">&quot;eps&quot;</span>]],</span>
+<span id="cb16-13"><a href="#cb16-13" tabindex="-1"></a>  <span class="at">delta =</span> loading_budget[[<span class="st">&quot;delta&quot;</span>]]</span>
+<span id="cb16-14"><a href="#cb16-14" tabindex="-1"></a>)</span></code></pre></div>
+<p>After either option, the estimated directions can be reused in
+<code>dp_scree()</code>:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a>scree_reused <span class="ot">&lt;-</span> <span class="fu">dp_scree</span>(</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>  X,</span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>  <span class="at">k =</span> <span class="dv">5</span>,</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>  <span class="at">privacy =</span> reuse_privacy,</span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;clipped&quot;</span>,</span>
+<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">clipped_control</span>(<span class="at">C_clip =</span> <span class="dv">20</span>),</span>
+<span id="cb17-7"><a href="#cb17-7" tabindex="-1"></a>  <span class="at">V_dp =</span> loading_fit<span class="sc">$</span>directions,</span>
+<span id="cb17-8"><a href="#cb17-8" tabindex="-1"></a>  <span class="at">non_private =</span> <span class="cn">FALSE</span></span>
+<span id="cb17-9"><a href="#cb17-9" tabindex="-1"></a>)</span>
+<span id="cb17-10"><a href="#cb17-10" tabindex="-1"></a></span>
+<span id="cb17-11"><a href="#cb17-11" tabindex="-1"></a><span class="fu">summary</span>(scree_reused)</span></code></pre></div>
+</div>
+<div id="customize-the-plot" class="section level2">
+<h2>7. Customize the plot</h2>
+<p>Use <code>scree_plot_control()</code> to change the appearance of the
+stored plot.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a><span class="fu">plot</span>(</span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>  scree_fit,</span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>  <span class="at">type =</span> <span class="st">&quot;pve&quot;</span>,</span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a>  <span class="at">plot_control =</span> <span class="fu">scree_plot_control</span>(</span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">&quot;PVE among the first five PCs&quot;</span>,</span>
+<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a>    <span class="at">col =</span> <span class="fu">c</span>(<span class="at">nonprivate =</span> <span class="st">&quot;grey30&quot;</span>, <span class="at">clipped =</span> <span class="st">&quot;#1F4E79&quot;</span>),</span>
+<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a>    <span class="at">legend_labels =</span> <span class="fu">c</span>(<span class="at">nonprivate =</span> <span class="st">&quot;Ordinary PCA&quot;</span>, <span class="at">clipped =</span> <span class="st">&quot;Clipped DP&quot;</span>),</span>
+<span id="cb18-8"><a href="#cb18-8" tabindex="-1"></a>    <span class="at">lwd =</span> <span class="dv">2</span>,</span>
+<span id="cb18-9"><a href="#cb18-9" tabindex="-1"></a>    <span class="at">point_cex =</span> <span class="fl">1.2</span>,</span>
+<span id="cb18-10"><a href="#cb18-10" tabindex="-1"></a>    <span class="at">cex_main =</span> <span class="fl">1.2</span>,</span>
+<span id="cb18-11"><a href="#cb18-11" tabindex="-1"></a>    <span class="at">legend_position =</span> <span class="st">&quot;topright&quot;</span></span>
+<span id="cb18-12"><a href="#cb18-12" tabindex="-1"></a>  )</span>
+<span id="cb18-13"><a href="#cb18-13" tabindex="-1"></a>)</span></code></pre></div>
+<p><img role="img" aria-label="Customized PVE plot comparing private and ordinary PCA" src="data:image/png;base64,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" alt="Customized PVE plot comparing private and ordinary PCA" style="display: block; margin: auto;" /></p>
+<table>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Setting</th>
+<th align="left">What it changes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>title</code>, <code>xlab</code>,
+<code>ylab</code></td>
+<td align="left">Plot title and axis labels.</td>
+</tr>
+<tr class="even">
+<td align="left"><code>col</code>, <code>lty</code>,
+<code>pch</code></td>
+<td align="left">Named series colors, line types, and point
+symbols.</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>lwd</code>, <code>point_cex</code></td>
+<td align="left">Line width and point-size multiplier.</td>
+</tr>
+<tr class="even">
+<td align="left"><code>cex_main</code>, <code>cex_lab</code>,
+<code>cex_axis</code></td>
+<td align="left">Title, axis-label, and tick-label sizes.</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>legend_position</code>,
+<code>legend_labels</code>, <code>cex_legend</code>,
+<code>legend_bty</code></td>
+<td align="left">Legend position, labels, size, and border.</td>
+</tr>
+</tbody>
+</table>
+<p>For complete argument descriptions, see <code>?dp_scree</code>,
+<code>?plot.dp_scree</code>, and <code>?scree_plot_control</code>.</p>
+<hr />
+<p><strong>Previous:</strong> <a href="tutorials-loading-plots.html">DP
+Loading Plot</a><br />
+<strong>Next:</strong> <a href="tutorials-score-plots.html">DP Score
+Plot</a><br />
+<strong>Tutorial overview:</strong> <a href="tutorials-getting-started.html#choose-a-starting-point">Choose a
+starting point</a></p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

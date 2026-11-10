@@ -2,119 +2,151 @@
 % Please edit documentation in R/score.R
 \name{dp_score}
 \alias{dp_score}
+\alias{summary.dp_score}
+\alias{summary.dp_score_group}
+\alias{print.summary.dp_score}
+\alias{print.dp_score}
+\alias{print.dp_score_group}
 \title{Differentially private score histograms}
 \usage{
 dp_score(
   X,
-  eps,
-  delta,
+  privacy,
   bins,
   method = c("add", "sparse"),
-  center = TRUE,
-  standardize = FALSE,
-  g_dppca = FALSE,
-  cpp.option = FALSE,
-  axes = c(1, 2)
+  cpp.option = TRUE,
+  axes = c(1, 2),
+  V_dp = NULL,
+  non_private = FALSE,
+  group = NULL
 )
+
+\method{summary}{dp_score}(object, ...)
+
+\method{summary}{dp_score_group}(object, ...)
+
+\method{print}{summary.dp_score}(x, digits = 4, ...)
+
+\method{print}{dp_score}(x, ...)
+
+\method{print}{dp_score_group}(x, ...)
 }
 \arguments{
-\item{X}{A numeric matrix or data frame. Rows correspond to observations and
-columns correspond to variables.}
+\item{X}{A numeric matrix or data frame with observations in rows and variables
+in columns. Non-numeric data-frame columns are excluded with a warning;
+numeric values must be finite. At least two observations and two numeric
+features are required. If directions must be estimated, the
+pairwise-separation condition of \code{\link[=dp_loading]{dp_loading()}} also applies.}
 
-\item{eps}{Positive number defining the total \code{epsilon} privacy parameter.}
+\item{privacy}{A \code{\link[=privacy_control]{privacy_control()}} object allocating budget to \code{loading}
+and \code{score} (equal shares by default). Each requested histogram method
+receives the full histogram allocation.}
 
-\item{delta}{Number in \verb{(0, 1)} defining the total \code{delta} privacy parameter.}
+\item{bins}{Positive integer vector of length two giving the number of
+histogram bins along the selected score axes.}
 
-\item{bins}{Integer vector of length 2 defining the number of histogram bins
-along the first and second score axes, respectively.}
+\item{method}{One or both histogram methods: \code{"add"} (Gaussian additive noise)
+and \code{"sparse"} (thresholded sparse histogram). Default:
+\code{c("add", "sparse")}.}
 
-\item{method}{Character vector specifying which private histogram methods to
-compute. Use \code{"add"} for the additive Gaussian histogram and \code{"sparse"} for
-the sparse thresholded histogram. The default is \code{c("add", "sparse")}.}
+\item{cpp.option}{Whether to use the compiled spherical-Kendall implementation
+(\code{TRUE} by default) when estimating private directions; ignored if
+\code{V_dp} is supplied.}
 
-\item{center}{A logical value indicating whether to center the columns of \code{X}
-before computing principal component directions. The default is \code{TRUE}.}
+\item{axes}{Two distinct PC indices for the horizontal and vertical score
+axes, respectively (\code{c(1, 2)} by default). Each must be between \code{1}
+and the number of numeric PCA features.}
 
-\item{standardize}{A logical value indicating whether to scale the columns of
-\code{X} by their sample standard deviations after optional centering. The
-default is \code{FALSE}.}
+\item{V_dp}{Optional \code{p} by \code{p} private PC direction matrix (\code{NULL} by default),
+where \code{p} is the number of numeric PCA features. Columns must be
+orthonormal and rows must follow the feature order in \code{X}; matching
+row names are required when both sets of names exist.}
 
-\item{g_dppca}{A logical value indicating whether to use private principal
-component directions. The default is \code{FALSE}. See \code{\link[=dp_pc_dir]{dp_pc_dir()}} for details.}
+\item{non_private}{Whether to compute and store ordinary PCA reference results
+(\code{FALSE} by default). For score analysis, these include mean-centered ordinary
+PCA scores and empirical reference histograms.}
 
-\item{cpp.option}{A logical value passed to \code{\link[=dp_pc_dir]{dp_pc_dir()}} when
-\code{g_dppca = TRUE}. The default is \code{FALSE}.}
+\item{group}{Optional group column name in \code{X} or vector of group labels
+(\code{NULL} by default). A selected group column is excluded from PCA
+features, even when numeric; group labels and membership are assumed
+public. All groups share the same private directions,
+frame, and histogram grid.}
 
-\item{axes}{Integer vector of length 2 specifying the principal components
-used to construct the score coordinates. The default is \code{c(1, 2)}.}
+\item{object}{A result from \code{\link[=dp_score]{dp_score()}}, with or without \code{group}.}
+
+\item{...}{Reserved for S3 generic compatibility.}
+
+\item{x}{A result from \code{\link[=dp_score]{dp_score()}}, with or without \code{group}.}
+
+\item{digits}{Number of significant digits shown in tables.}
 }
 \value{
-A list with components:
-\describe{
-\item{score}{An \eqn{n \times 2} matrix containing the PC scores for the
-two selected axes.}
-\item{frame}{A list with components \code{xlim} and \code{ylim}.}
-\item{none}{Data frame for the non-private empirical histogram.}
-\item{add}{Data frame for the additive Gaussian private histogram, or
-\code{NULL} if not requested.}
-\item{sparse}{Data frame for the sparse private histogram, or \code{NULL} if
-not requested.}
-\item{method}{Character vector of private histogram methods used.}
-}
+A \code{dp_score} object containing the private \code{frame} and requested
+histogram methods (\code{add} and/or \code{sparse}), or \code{groups} for grouped fits.
+Each histogram has \code{xmin}, \code{xmax}, \code{ymin}, \code{ymax} and \code{prob} columns.
+\code{nonprivate} is \code{NULL} by default; when requested it contains \code{scores},
+\code{frame} and the empirical \code{histogram} (or group histograms under \code{groups}).
+\code{metadata} contains data dimensions, axes, bins, methods and privacy settings.
+Use \code{summary()} and \code{plot()} to inspect or visualize stored results.
+
+A summary containing the public sample size, axes, grid, private
+frame (including its center), allocated privacy budget and a table of
+positive-bin counts and probability sums. No data-dependent private
+mechanisms are run.
+
+Invisibly returns \code{x}.
+
+Invisibly returns \code{x}.
 }
 \description{
-This function computes two-dimensional principal component scores and returns
-differentially private histogram estimates on the score space. It returns the
-score coordinates, the plotting frame, the non-private histogram, and the
-requested private histogram estimates.
+This function projects observations onto supplied private directions or
+directions estimated by \code{\link[=dp_loading]{dp_loading()}} and computes two-dimensional score
+histograms. Observed coordinates and empirical reference histograms are
+returned only when \code{non_private = TRUE}.
 }
 \details{
-Let \eqn{v_a} and \eqn{v_b} be the principal component directions selected
-by \code{axes = c(a, b)} for some \eqn{1 \le a < b \le ncol(X)}.
-After preprocessing, the score point for \eqn{i}th observation
-is \eqn{s_i = (x_i^\top v_a, x_i^\top v_b)}. A non-private score
-plot would display the points \eqn{s_1, \ldots, s_n} directly. This function
-instead summarizes their empirical distribution by a two-dimensional histogram
-and releases private versions of the histogram for the visualization.
+Scores are projected onto the selected private PC directions. Rather than
+releasing individual projected coordinates, the function estimates a private
+two-dimensional plotting frame followed by private histogram probabilities.
+The frame uses two private coordinate medians and an inflated private
+0.99 quantile of distances from their center (inflation factor \code{1.2}),
+using unbounded quantile mechanisms.
 
-The plotting frame is constructed privately from the score coordinates. The
-frame center is estimated by coordinate-wise private medians, and the frame
-radius is estimated by the private 0.99 quantile of the Euclidean distances
-from this private center. The resulting private radius is inflated by a fixed
-factor and used to form a square plotting frame. The private frame is computed
-using a smooth-sensitivity based quantile mechanism
-\insertCite{nissim2007smooth}{dppca}.
+For a fixed frame and directions under replacement adjacency, the histogram
+count vector has \code{l1} sensitivity at most \code{2} and \code{l2} sensitivity at most
+\code{sqrt(2)}. Out-of-frame scores are assigned to boundary bins. Adaptive
+private directions and frame selection require privacy composition. Input is
+not automatically centered or standardized; data-dependent mean centering
+or standardization is not covered by the count sensitivity argument.
 
-The private histogram is computed on the rectangular grid defined by the
-private frame and the bin counts in \code{bins}. Under
-row-level adjacency, changing one observation can increase one bin count by
-one and decrease another by one, giving \eqn{\ell_1} sensitivity at most
-\eqn{2} and \eqn{\ell_2} sensitivity at most \eqn{\sqrt{2}} for the count
-vector.
-
-Two private histogram mechanisms are supported:
+Two histogram mechanisms are available:
 \itemize{
-\item \code{"add"} constructs an additive differentially private histogram by
-adding Gaussian noise to all bin counts, clipping negative noisy counts to
-zero, and normalizing the result. This additive-noise approach is commonly
-used for private histograms; see
-\insertCite{wasserman2010statistical;textual}{dppca}.
-
-\item \code{"sparse"} constructs a sparse differentially private histogram for
-settings where many bins are empty. It perturbs only nonzero empirical bin
-proportions and keeps bins whose noisy values exceed a stability threshold,
-following the stability-based private histogram idea of
-\insertCite{karwa2017finite;textual}{dppca}.
+\item \code{"add"}: Add Gaussian noise to all counts, truncate negatives to
+zero, and normalize. The classical Gaussian calibration has a standard
+sufficient guarantee for \verb{0 < eps_hist < 1}; larger values require a
+separate calibration check. All-zero truncated counts cause an error.
+\item \code{"sparse"}: Add Laplace noise to nonzero bin proportions, retain
+bins above a privacy-dependent threshold, and normalize positive mass.
+If none survive, return an all-zero histogram.
 }
 
-The privacy parameters are allocated across the privacy-consuming steps. If
-\code{g_dppca = FALSE}, half of \code{eps} and \code{delta} is used for private frame
-construction and half for the private histogram. If \code{g_dppca = TRUE}, the
-parameters are split equally among private direction estimation, private frame
-construction, and private histogram release.
+The \code{score} epsilon allocation is split 35\% for the private frame and 65\%
+for the histogram; all score delta goes to the histogram. The frame epsilon
+is divided equally among two private medians and one radial quantile.
+Directions and frame are shared across methods. Each requested histogram
+method receives the full histogram allocation, so jointly releasing \code{"add"}
+and \code{"sparse"} requires composition across methods.
 
-For a detailed procedure and mathematical formulations,
-refer \url{https://yejinjo0220.github.io/dppca/articles/dp_score}.
+For grouped data, the partition and labels are assumed public and fixed;
+groups share directions, frame and grid. Parallel composition applies to
+disjoint group histograms under this assumption, while different methods
+still require composition. \code{non_private = FALSE} does not privatize group
+membership. Input dimensions, feature schema, bins, and tuning choices are
+assumed public. Repeated releases also require composition.
+
+The optional ordinary PCA reference uses sample-mean-centered scores and a
+zero-centered comparison frame. It is not differentially private. See
+\code{\link[=dp_loading]{dp_loading()}} for direction-estimation and Gaussian calibration conditions.
 }
 \examples{
 data(gau, package = "dppca")
@@ -122,24 +154,27 @@ data(gau, package = "dppca")
 # Use a small subset to keep the example fast.
 X <- gau[1:300, ]
 
-# Compute private two-dimensional PCA scores using the additive histogram method.
+# Release a private histogram with fixed preprocessing and no raw scores.
 set.seed(123)
 score_gau <- dp_score(
   X,
-  eps = 2,
-  delta = 1e-3,
+  privacy = privacy_control(eps = 1.8, delta = 1e-3),
   method = "add",
-  bins = c(10, 10)
+  bins = c(10, 10),
+  non_private = FALSE
 )
 
-head(score_gau$score)
+score_gau$frame
 head(score_gau$add)
+summary(score_gau)
+# plot(score_gau, type = "histogram")
+# To use a group column: dp_score(X, privacy, bins, group = "region")
 
 }
 \references{
 \insertRef{dwork2014algorithmic}{dppca}
 
-\insertRef{nissim2007smooth}{dppca}
+\insertRef{durfee2023unbounded}{dppca}
 
 \insertRef{wasserman2010statistical}{dppca}
 
@@ -148,8 +183,8 @@ head(score_gau$add)
 \insertRef{kim2025robustdppca}{dppca}
 }
 \seealso{
-\code{\link[=dp_score_plot]{dp_score_plot()}} for plotting the output of this function.
-\code{\link[=dp_score_group]{dp_score_group()}} and \code{\link[=dp_score_plot_group]{dp_score_plot_group()}} for group-wise score
-histograms.
-\code{\link[=dp_pc_dir]{dp_pc_dir()}} for private principal component direction estimation.
+\code{\link[=plot.dp_score]{plot.dp_score()}} for plotting stored results without new private estimates.
+\code{\link[=dp_pca]{dp_pca()}} and \code{\link[=plot.dp_pca]{plot.dp_pca()}} for estimation followed by plots of a stored fit.
+\code{\link[=plot.dp_score_group]{plot.dp_score_group()}} for displaying a grouped result.
+\code{\link[=dp_loading]{dp_loading()}} for private principal component direction estimation.
 }

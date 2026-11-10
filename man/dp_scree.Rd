@@ -2,150 +2,155 @@
 % Please edit documentation in R/scree.R
 \name{dp_scree}
 \alias{dp_scree}
+\alias{print.dp_scree}
+\alias{summary.dp_scree}
+\alias{print.summary.dp_scree}
 \title{Differentially private scree values}
 \usage{
 dp_scree(
   X,
   k,
+  privacy,
   method = c("clipped", "pmwm", "huber"),
   control = NULL,
-  eps,
-  delta,
-  center = TRUE,
-  standardize = FALSE,
-  g_dppca = FALSE,
-  cpp.option = FALSE,
-  mono = TRUE
+  cpp.option = TRUE,
+  mono = TRUE,
+  V_dp = NULL,
+  non_private = FALSE
 )
+
+\method{print}{dp_scree}(x, ...)
+
+\method{summary}{dp_scree}(object, ...)
+
+\method{print}{summary.dp_scree}(x, digits = 4, ...)
 }
 \arguments{
-\item{X}{A numeric matrix or data frame. Rows correspond to observations and
-columns correspond to variables.}
+\item{X}{A numeric matrix or data frame with observations in rows and variables
+in columns. Non-numeric data-frame columns are excluded with a warning;
+numeric values must be finite. At least two observations and one numeric
+feature are required. If directions must be estimated, the pairwise-separation
+condition of \code{\link[=dp_loading]{dp_loading()}} also applies.}
 
-\item{k}{Positive integer defining the number of leading principal components
-to estimate. Must be an integer between \code{1} and the number of columns in \code{X}.}
+\item{k}{Number of leading components to estimate; an integer from \code{1} to
+the number of retained numeric features.}
 
-\item{method}{Scree value estimation method or methods. One or more of
-\code{"clipped"}, \code{"pmwm"}, or \code{"huber"}. If omitted, \code{"clipped"} is used.}
+\item{privacy}{A \code{\link[=privacy_control]{privacy_control()}} object allocating budget to \code{loading}
+and \code{scree} (equal shares by default). Each requested scree method receives
+the full scree allocation.}
 
-\item{control}{Optional method-specific control list created by
-\code{\link[=clipped_control]{clipped_control()}}, \code{\link[=pmwm_control]{pmwm_control()}}, or \code{\link[=huber_control]{huber_control()}}. When multiple
-methods are requested, use a named list with method names.}
+\item{method}{One or more scree estimators: \code{"clipped"}, \code{"pmwm"}, or \code{"huber"}
+(\code{"clipped"} by default).}
 
-\item{eps}{Positive number defining the total \code{epsilon} privacy parameter.
-If \code{g_dppca = TRUE}, it is split between private direction estimation and
-private scree estimation.}
+\item{control}{Tuning parameters from \code{\link[=clipped_control]{clipped_control()}}, \code{\link[=pmwm_control]{pmwm_control()}},
+or \code{\link[=huber_control]{huber_control()}}. For multiple methods, supply a named list of
+method-specific controls; required tuning values must be supplied.}
 
-\item{delta}{Number in \verb{(0, 1)} defining the total \code{delta} privacy parameter.
-If \code{g_dppca = TRUE}, it is split between private direction estimation and
-private scree estimation.}
+\item{cpp.option}{Whether to use the compiled spherical-Kendall implementation
+(\code{TRUE} by default) when estimating private directions; ignored if
+\code{V_dp} is supplied.}
 
-\item{center}{A logical value indicating whether to center the columns of \code{X}
-before computing principal component directions. The default is \code{TRUE}.}
+\item{mono}{Whether to apply nonincreasing isotonic regression (\code{TRUE} by
+default). Negative scree estimates are truncated to zero in either case.}
 
-\item{standardize}{A logical value indicating whether to scale the columns of
-\code{X} by their sample standard deviations after optional centering. The
-default is \code{FALSE}.}
+\item{V_dp}{Optional \code{p} by \code{p} private PC direction matrix (\code{NULL} by default),
+where \code{p} is the number of numeric PCA features. Columns must be
+orthonormal and rows must follow the feature order in \code{X}; matching
+row names are required when both sets of names exist.}
 
-\item{g_dppca}{A logical value indicating whether to use private principal
-component directions for scree estimation. The default is \code{FALSE}. See
-\code{\link[=dp_pc_dir]{dp_pc_dir()}} for details.}
+\item{non_private}{Whether to compute and store ordinary PCA reference results
+(\code{FALSE} by default). The reference contains ordinary PCA scree and PVE.}
 
-\item{cpp.option}{A logical value passed to \code{\link[=dp_pc_dir]{dp_pc_dir()}} when
-\code{g_dppca = TRUE}. The default is \code{FALSE}.
-When \code{g_dppca = TRUE}, \code{\link[=dp_pc_dir]{dp_pc_dir()}} is called with arguments
-\code{eps = eps / 2} and \code{delta = delta / 2}.}
+\item{x}{A \code{summary.dp_scree} object.}
 
-\item{mono}{A logical value indicating whether to apply monotone
-post-processing to the vector of private scree values. The default is \code{TRUE}.}
+\item{...}{Further arguments, reserved for compatibility with the generic.}
+
+\item{object}{A \code{dp_scree} object.}
+
+\item{digits}{Number of significant digits used for printing.}
 }
 \value{
-If one method is requested, a list with components:
-\itemize{
-\item \code{method}: scree value estimation method.
-\item \code{scree_np}: non-private scree estimates.
-\item \code{pve_np}: non-private proportions of variance explained.
-\item \code{scree}: differentially private scree value estimates.
-\item \code{pve}: differentially private proportions of variance explained.
-}
-If multiple methods are requested, a named list of method-specific results is
-returned.
+A \code{dp_scree} list containing one entry per requested method
+(\code{clipped}, \code{pmwm}, and/or \code{huber}). Each entry has \code{scree} and \code{pve} vectors named
+\code{PC1}, ..., \code{PCk}. The \code{nonprivate} entry holds the optional ordinary PCA
+reference (or \code{NULL} when omitted), and \code{metadata} stores input dimensions,
+methods and the recorded privacy budget.
+PVE is normalized over the \code{k} returned components in every entry.
+Use \code{summary()} for scree, PVE and cumulative PVE tables, and \code{plot()}
+to draw stored estimates without a new randomized computation.
+
+Invisibly returns \code{x}.
+
+A \code{summary.dp_scree} object containing one table per stored method.
+Each table gives scree values, PVE and cumulative PVE. PVE is normalized
+over the fitted components, as in \code{\link[=dp_scree]{dp_scree()}}. Printing the summary
+shows component importance by method and the privacy allocations.
 }
 \description{
-This function computes estimates of scree values, eigenvalues of covariance
-matrix, for principal component analysis,
-including both the usual non-private estimates and differentially private
-estimates.
-The private estimates are computed as the private mean of the squared
-principal component scores.
-See Details for the estimating equations and method-specific construction.
+Estimates scree values along private principal component directions using
+means of squared differences from disjoint score pairs. An ordinary PCA
+reference is computed only when \code{non_private = TRUE}.
 }
 \details{
-Let \eqn{X} denote the preprocessed data matrix and let \eqn{v_l} be the \eqn{l}th
-principal component direction. The \eqn{l}th score vector is
-\eqn{z_l = X v_l}. The corresponding sample scree value can be written as
-\deqn{
-  \hat{\lambda}_l
-  = v_l^\top \widehat{\Sigma} v_l
-  = \frac{1}{n - 1}\sum_{i = 1}^n z_{il}^2
-  = \frac{n}{n - 1}\left(\frac{1}{n}\sum_{i = 1}^n w_{il}\right),
-  \qquad w_{il} = z_{il}^2.
-}
-Therefore, each scree value is estimated by privately estimating the mean of
-\eqn{w_{1l}, \ldots, w_{nl}} and multiplying by \eqn{n/(n - 1)}.
+Let \verb{Y = X V} be scores along the private directions. For each method,
+\code{m = floor(n / 2)} disjoint pairs of rows are formed and the component-wise
+values are
+\deqn{W_{jl} = (Y_{b_j,l} - Y_{a_j,l})^2/2.}
+An odd final observation is unused. The methods privately estimate the
+column means of \code{W}, corresponding to variance along private directions
+rather than necessarily to sample covariance eigenvalues.
 
-The supported methods differ in how this private mean is estimated:
+The estimators differ as follows:
 \itemize{
-\item \code{"clipped"} clips the squared scores \eqn{w_{i\ell}} at \code{C_clip} and
-then applies the Gaussian mechanism \insertCite{dwork2014algorithmic}{dppca}.
-This is the simplest option but depends directly on the clipping threshold.
-\item \code{"pmwm"} uses the private modified winsorized mean approach of
-\insertCite{ramsay2025pmw;textual}{dppca}, adapted from the accompanying
-Python implementation into R. It privately estimates tail cutoffs,
-winsorizes the squared scores \eqn{w_{i\ell}}, and releases a noisy
-winsorized mean.
-\item \code{"huber"} uses a Huber-type private robust mean estimator based on
-noisy gradient descent, following \insertCite{yu2024gaussian;textual}{dppca}.
+\item \code{"clipped"}: Clip the paired values at \code{C_clip}, then perturb their
+mean vector with Gaussian noise.
+\item \code{"pmwm"}: Estimate private lower and upper quantiles, winsorize
+the paired values, and perturb their mean vector with Gaussian noise.
+Quantile calls share half of the method's epsilon; the mean receives
+the remaining half and all delta.
+\item \code{"huber"}: Estimate private component scales and apply noisy Huber
+gradient updates. The scale step uses \code{m2_frac} of epsilon; the updates
+use the remainder and all delta. At least eight observations are required.
 }
 
-The argument \code{g_dppca} controls how the principal component directions are
-obtained. If \code{g_dppca = FALSE}, the directions are computed non-privately as
-an eigenvector of sample covariance, and the full privacy parameters
-\code{eps} and \code{delta} are used for private scree value estimation. If \code{g_dppca = TRUE},
-the directions are computed privately using \code{\link[=dp_pc_dir]{dp_pc_dir()}}.
-In that case, the privacy parameters are split equally:
-\code{\link[=dp_pc_dir]{dp_pc_dir()}} receives \code{eps = eps / 2} and \code{delta = delta / 2} for
-private direction estimation, and the remaining \code{eps / 2} and \code{delta / 2}
-are used for private scree value estimation.
-When \code{mono = TRUE}, the final monotone adjustment is a post-processing step and
-does not change the privacy guarantee.
+Directions are estimated once unless \code{V_dp} is supplied. The input is not
+automatically centered or standardized; sensitivity arguments use fixed-size
+replacement adjacency and condition on the directions. Data-dependent
+scaling requires separate privacy analysis. Sample size, schema, component
+selection, and tuning parameters are assumed public.
 
-For a detailed procedure and mathematical formulations,
-refer \url{https://yejinjo0220.github.io/dppca/articles/dp_scree}.
+Each requested scree method uses the full scree allocation. Releasing
+several methods together, or releasing results from repeated calls, requires
+composition beyond the stored budget for a single method. The optional
+ordinary PCA reference is not private.
+
+Scree values are truncated at zero, optionally made nonincreasing, and
+normalized over the returned \code{k} components for PVE. A zero total yields
+zero PVE. These steps are post-processing and do not reorder the directions.
 }
 \examples{
 data(gau, package = "dppca")
 
 # Use a small subset to keep the example fast.
 X <- gau[1:100, ]
+privacy <- privacy_control(eps = 3, delta = 1e-4)
 
-# Estimate the private scree values using the clipped mean method.
+# Estimate clipped private scree values and an ordinary PCA comparison.
 set.seed(123)
-dp_scree(
+out <- dp_scree(
   X,
   k = 2,
+  privacy = privacy,
   method = "clipped",
-  control = clipped_control(C_clip = 3),
-  eps = 2,
-  delta = 1e-3
+  control = clipped_control(C_clip = 3)
 )
 
-# Other scree methods can be used by changing `method` and `control`, e.g.,
-# method = "pmwm",
-# control = pmwm_control(a = 0, b = 50, trim_const = 10, eta = 0.01)
-#
-# method = "huber",
-# control = huber_control(k_min_m2 = -10, k_max_m2 = 10, m2_frac = 1 / 4)
+out$nonprivate
+out$clipped
+
+# Multiple methods can be requested together by using a named control list.
+# Loading is estimated once; each method receives the full scree budget.
+# Change the split in privacy_control() to choose a different allocation.
 
 }
 \references{
@@ -153,12 +158,14 @@ dp_scree(
 
 \insertRef{ramsay2025pmw}{dppca}
 
+\insertRef{durfee2023unbounded}{dppca}
+
 \insertRef{yu2024gaussian}{dppca}
 
 \insertRef{kim2025robustdppca}{dppca}
 }
 \seealso{
-\code{\link[=dp_pc_dir]{dp_pc_dir()}} for principal component direction estimation.
+\code{\link[=dp_loading]{dp_loading()}} for private principal component direction estimation.
 \code{\link[=clipped_control]{clipped_control()}}, \code{\link[=pmwm_control]{pmwm_control()}}, and \code{\link[=huber_control]{huber_control()}} for
 method-specific tuning parameters.
 }

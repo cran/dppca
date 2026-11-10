@@ -1,859 +1,2396 @@
-# Shiny demo app for the dppca package
-# Put this file at: inst/shiny/dppca-app/app.R
-
 library(shiny)
 library(dppca)
 
-# ------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------
+# Requires the S3-enabled dppca sources supplied with this update.
+# Estimate on Run; plot the stored fits through their S3 methods.
 
-.load_dppca_data <- function(name) {
-  env <- new.env(parent = emptyenv())
-  utils::data(list = name, package = "dppca", envir = env)
-  if (!exists(name, envir = env, inherits = FALSE)) {
-    stop("Could not load dataset '", name, "' from package dppca.")
-  }
-  get(name, envir = env, inherits = FALSE)
-}
-
-.default_delta <- function(n) {
-  # Use a valid DP delta in (0, 1). This corresponds to 10^{-ceiling(log10(n))}.
-  10^(-ceiling(log10(n)))
-}
-
-.group_vector <- function(group) {
-  if (is.null(group)) return(NULL)
-  if (is.data.frame(group)) {
-    if (ncol(group) < 1L) return(NULL)
-    return(group[[1L]])
-  }
-  if (is.matrix(group)) {
-    if (ncol(group) < 1L) return(NULL)
-    return(group[, 1L])
-  }
-  as.vector(group)
-}
-
-.infer_group_column <- function(dat) {
-  if (!is.data.frame(dat)) dat <- as.data.frame(dat)
-  if (ncol(dat) < 2L) return(NULL)
-
-  nm <- names(dat)
-  lower_nm <- tolower(nm)
-  preferred <- match(c("group", "groups", "label", "labels", "class", "cluster", "g", "color", "colour"), lower_nm)
-  preferred <- preferred[!is.na(preferred)]
-  if (length(preferred) > 0L) return(nm[preferred[1L]])
-
-  non_num <- which(!vapply(dat, is.numeric, logical(1)))
-  if (length(non_num) > 0L) return(nm[non_num[1L]])
-
-  low_card <- which(vapply(dat, function(x) {
-    ux <- unique(stats::na.omit(x))
-    is.numeric(x) && length(ux) >= 2L && length(ux) <= min(20L, floor(length(x) / 3)) && all(abs(ux - round(ux)) < 1e-8)
-  }, logical(1)))
-  if (length(low_card) > 0L && ncol(dat) >= 3L) return(nm[low_card[length(low_card)]])
-
-  NULL
-}
-
-.split_grouped_data <- function(dat, group = NULL) {
-  dat <- as.data.frame(dat)
-
-  if (!is.null(group)) {
-    if (is.character(group) && length(group) == 1L && group %in% names(dat)) {
-      group_vec <- dat[[group]]
-      X <- dat[, setdiff(names(dat), group), drop = FALSE]
-      return(list(X = X, group = group_vec))
-    }
-    group_vec <- .group_vector(group)
-    return(list(X = dat, group = group_vec))
-  }
-
-  group_col <- .infer_group_column(dat)
-  if (!is.null(group_col)) {
-    group_vec <- dat[[group_col]]
-    X <- dat[, setdiff(names(dat), group_col), drop = FALSE]
-    return(list(X = X, group = group_vec))
-  }
-
-  list(X = dat, group = NULL)
-}
-
-.load_grouped_example <- function(grouped_name, fallback_name, label, group_col = "group") {
-  grouped <- .load_dppca_data(grouped_name)
-
-  # For dppca example datasets, grouped data contain the corresponding
-  # feature data with an additional group column. Use that column as group
-  # labels, and remove it from the PCA feature matrix.
-  if (is.data.frame(grouped) || is.matrix(grouped)) {
-    grouped_df <- as.data.frame(grouped)
-    if (!is.null(group_col) && group_col %in% names(grouped_df)) {
-      split <- .split_grouped_data(grouped_df, group_col)
-    } else {
-      split <- .split_grouped_data(grouped_df)
-    }
-    return(list(X = split$X, group = split$group, label = label))
-  }
-
-  # Fallback behavior: if the grouped object is only a label vector,
-  # pair it with the corresponding feature matrix.
-  fallback_X <- .load_dppca_data(fallback_name)
-  list(X = fallback_X, group = .group_vector(grouped), label = label)
-}
-
-.load_example_dataset <- function(name) {
-  switch(
-    name,
-    gau = list(X = .load_dppca_data("gau"), group = NULL, label = "Gaussian"),
-    gau_grouped = .load_grouped_example("gau_g", "gau", "Gaussian with groups", group_col = "group"),
-    adult = list(X = .load_dppca_data("adult"), group = NULL, label = "Adult"),
-    stop("Unknown example dataset: ", name)
-  )
-}
-
-.to_numeric_matrix <- function(dat) {
-  dat <- as.data.frame(dat)
-
-  # Keep only numeric columns. This makes the app robust for example data
-  # that may include labels or other non-numeric columns.
-  is_num <- vapply(dat, is.numeric, logical(1))
-  dat_num <- dat[, is_num, drop = FALSE]
-
-  if (ncol(dat_num) < 2L) {
-    stop("The selected data must contain at least two numeric columns.")
-  }
-  if (nrow(dat_num) < 2L) {
-    stop("The selected data must contain at least two rows.")
-  }
-
-  X <- as.matrix(dat_num)
-  storage.mode(X) <- "double"
-  X
-}
-
-.selected_scree_methods <- function(input) {
-  method <- input$scree_method
-  if (is.null(method) || !length(method)) {
-    return(character(0))
-  }
-  unique(method)
-}
-
-.make_scree_control <- function(input) {
-  method <- .selected_scree_methods(input)
-
-  clipped <- clipped_control(
-    C_clip = input$C_clip
-  )
-
-  pmwm <- pmwm_control(
-    beta = input$pmwm_beta,
-    a = input$pmwm_a,
-    b = input$pmwm_b,
-    trim_const = input$pmwm_trim_const,
-    eta = input$pmwm_eta,
-    split_mode = input$pmwm_split_mode
-  )
-
-  huber <- huber_control(
-    mu0 = input$huber_mu0,
-    eta0 = input$huber_eta0,
-    T = if (is.na(input$huber_T)) NULL else input$huber_T,
-    M = if (is.na(input$huber_M)) NULL else input$huber_M,
-    k_min_m2 = input$huber_k_min_m2,
-    k_max_m2 = input$huber_k_max_m2,
-    m2_frac = input$huber_m2_frac
-  )
-
-  controls <- list(clipped = clipped, pmwm = pmwm, huber = huber)
-
-  if (length(method) == 1L) {
-    controls[[method]]
-  } else {
-    controls[method]
-  }
-}
-
-.call_dp_scree_plot <- function(args) {
-  fmls <- names(formals(dp_scree_plot))
-
-  if ("eps" %in% fmls) {
-    args$eps <- args$eps_total
-    args$delta <- args$delta_total
-    args$eps_total <- NULL
-    args$delta_total <- NULL
-  }
-
-  do.call(dp_scree_plot, args)
-}
-
-.call_dp_scree <- function(args) {
-  fmls <- names(formals(dp_scree))
-
-  if ("eps" %in% fmls) {
-    args$eps <- args$eps_total
-    args$delta <- args$delta_total
-    args$eps_total <- NULL
-    args$delta_total <- NULL
-  }
-
-  do.call(dp_scree, args)
-}
-
-.extract_scree_control <- function(control, method) {
-  if (is.null(control)) {
-    return(NULL)
-  }
-  if (!is.null(names(control)) && method %in% names(control)) {
-    return(control[[method]])
-  }
-  control
-}
-
-.plot_scree_methods <- function(
-    X,
-    k,
-    method,
-    eps_total,
-    delta_total,
-    center,
-    standardize,
-    control,
-    g_dppca,
-    cpp.option,
-    mono,
-    type
-) {
-  method <- unique(method)
-  type <- match.arg(type, choices = c("pve", "scree"))
-
-  if (!length(method)) {
-    stop("Choose at least one DP scree method.", call. = FALSE)
-  }
-
-  results <- list()
-  for (m in method) {
-    results[[m]] <- .call_dp_scree(list(
-      X = X,
-      k = k,
-      method = m,
-      eps_total = eps_total,
-      delta_total = delta_total,
-      center = center,
-      standardize = standardize,
-      control = .extract_scree_control(control, m),
-      g_dppca = g_dppca,
-      cpp.option = cpp.option,
-      mono = mono
-    ))
-  }
-
-  ref_obj <- results[[1L]]
-  y_list <- list(
-    nonprivate = if (type == "scree") ref_obj$scree_np else ref_obj$pve_np
-  )
-
-  for (m in names(results)) {
-    y_list[[m]] <- if (type == "scree") results[[m]]$scree else results[[m]]$pve
-  }
-
-  col_map <- c(
-    nonprivate = "black",
-    clipped = "red",
-    pmwm = "forestgreen",
-    huber = "blue"
-  )
-  pch_map <- c(
-    nonprivate = 16,
-    clipped = 17,
-    pmwm = 15,
-    huber = 18
-  )
-  lty_map <- c(
-    nonprivate = 1,
-    clipped = 1,
-    pmwm = 1,
-    huber = 1
-  )
-  label_map <- c(
-    nonprivate = "Non-private",
-    clipped = "Clipped",
-    pmwm = "PMWM",
-    huber = "Huber"
-  )
-
-  idx <- seq_len(k)
-  y_all <- unlist(y_list, use.names = FALSE)
-  y_all <- y_all[is.finite(y_all)]
-  ylim <- if (length(y_all)) range(y_all) else c(0, 1)
-  if (diff(ylim) == 0) {
-    ylim <- ylim + c(-0.5, 0.5)
-  }
-
-  ylab <- if (type == "scree") "Scree Value" else "Proportion of Variance Explained"
-  main <- if (type == "scree") "DP Scree Plot" else "DP PVE Plot"
-
-  series_names <- names(y_list)
-  first <- series_names[1L]
-
-  graphics::plot(
-    idx,
-    y_list[[first]],
-    type = "b",
-    col = unname(col_map[first]),
-    lty = unname(lty_map[first]),
-    pch = unname(pch_map[first]),
-    xlab = "Component",
-    ylab = ylab,
-    main = main,
-    ylim = ylim
-  )
-
-  if (length(series_names) > 1L) {
-    for (nm in series_names[-1L]) {
-      graphics::lines(
-        idx,
-        y_list[[nm]],
-        type = "b",
-        col = unname(col_map[nm]),
-        lty = unname(lty_map[nm]),
-        pch = unname(pch_map[nm])
-      )
-    }
-  }
-
-  graphics::legend(
-    "topright",
-    legend = unname(label_map[series_names]),
-    col = unname(col_map[series_names]),
-    lty = unname(lty_map[series_names]),
-    pch = unname(pch_map[series_names]),
-    bty = "n"
-  )
-
-  invisible(list(
-    nonprivate = list(scree = ref_obj$scree_np, pve = ref_obj$pve_np),
-    results = results
-  ))
-}
-
-# ------------------------------------------------------------
-# Data supplied by dppca_app(X, group = ...)
-# ------------------------------------------------------------
+# Data and small application helpers -----------------------------------------
 
 .supplied_X <- getOption("dppca.app.X", NULL)
 .supplied_group <- getOption("dppca.app.group", NULL)
 .has_supplied_data <- !is.null(.supplied_X)
 
-# ------------------------------------------------------------
-# UI
-# ------------------------------------------------------------
+.app_load_data <- function(name) {
+  env <- new.env(parent = emptyenv())
+  utils::data(list = name, package = "dppca", envir = env)
+  if (!exists(name, envir = env, inherits = FALSE)) {
+    stop("Could not load example dataset '", name, "'.", call. = FALSE)
+  }
+  get(name, envir = env, inherits = FALSE)
+}
+
+.app_data <- function(data, label, group = NULL) {
+  data <- as.data.frame(data)
+  preferred <- intersect(c("group", "groups", "label", "class"), names(data))
+  group_column <- if (length(preferred)) preferred[1] else ""
+  external_group <- NULL
+
+  if (!is.null(group)) {
+    if (is.character(group) && length(group) == 1L && group %in% names(data)) {
+      group_column <- group
+    } else {
+      if (is.data.frame(group)) group <- group[[1]]
+      if (is.matrix(group)) group <- group[, 1]
+      if (length(group) != nrow(data)) {
+        stop("Group labels must have one value per observation.", call. = FALSE)
+      }
+      external_group <- group
+      group_column <- ".provided_group"
+    }
+  }
+
+  list(
+    data = data,
+    label = label,
+    group_column = group_column,
+    external_group = external_group
+  )
+}
+
+.app_matrix <- function(data) {
+  # Numeric preview for UI limits; estimators receive the original data frame
+  # so their common preprocessing can report excluded columns.
+  numeric_columns <- vapply(data, function(x) {
+    is.numeric(x) && !is.complex(x) && is.null(dim(x))
+  }, logical(1))
+  X <- as.matrix(data[, numeric_columns, drop = FALSE])
+  storage.mode(X) <- "double"
+
+  if (nrow(X) < 2L || ncol(X) < 2L) {
+    stop("Choose data with at least two rows and two numeric variables.",
+         call. = FALSE)
+  }
+  if (any(!is.finite(X))) {
+    stop("Numeric variables must not contain missing or infinite values.",
+         call. = FALSE)
+  }
+  if (anyDuplicated(colnames(X))) {
+    stop("Variable names must be unique.", call. = FALSE)
+  }
+  X
+}
+
+.app_checked_data <- function(expr) {
+  tryCatch(force(expr), error = function(e) {
+    if (inherits(e, "shiny.silent.error")) stop(e)
+    validate(need(FALSE, conditionMessage(e)))
+  })
+}
+
+.app_integer <- function(value, label, lower = 1, upper = Inf) {
+  if (
+    length(value) != 1L || !is.numeric(value) || !is.finite(value) ||
+      value != floor(value) || value < lower || value > upper
+  ) {
+    stop(label, " must be an integer between ", lower, " and ", upper,
+         ".", call. = FALSE)
+  }
+  as.integer(value)
+}
+
+.app_controls <- function(input, methods) {
+  if (!length(methods)) {
+    stop("Choose at least one scree method.", call. = FALSE)
+  }
+
+  controls <- lapply(methods, function(method) {
+    switch(
+      method,
+      clipped = clipped_control(C_clip = input$C_clip),
+      pmwm = pmwm_control(
+        beta = input$pmwm_beta,
+        a = input$pmwm_a,
+        b = input$pmwm_b,
+        trim_const = input$pmwm_trim_const,
+        eta = input$pmwm_eta,
+        split_mode = input$pmwm_split_mode
+      ),
+      huber = huber_control(
+        mu0 = input$huber_mu0,
+        eta0 = input$huber_eta0,
+        T = .app_integer(input$huber_T, "Huber T"),
+        M = .app_integer(input$huber_M, "Huber M"),
+        k_min_m2 = input$huber_k_min_m2,
+        k_max_m2 = input$huber_k_max_m2,
+        m2_frac = input$huber_m2_frac
+      )
+    )
+  })
+  names(controls) <- methods
+  if (length(methods) == 1L) controls[[1]] else controls
+}
+
+.app_pca_split <- function(points) {
+  if (
+    length(points) != 2L || any(!is.finite(points)) ||
+      points[1] <= 0 || points[2] >= 100 || points[1] >= points[2]
+  ) {
+    stop("Keep a positive share for Loading, Scree, and Score.", call. = FALSE)
+  }
+
+  # The two slider handles divide 100% into three strictly positive shares.
+  c(
+    loading = points[1],
+    scree = points[2] - points[1],
+    score = 100 - points[2]
+  ) / 100
+}
+
+.app_privacy <- function(
+    input,
+    mode,
+    budget_mode = input$budget_mode
+) {
+  if (identical(budget_mode, "direct")) {
+    budgets <- list(
+      loading = c(eps = input$budget_loading_eps, delta = input$budget_loading_delta)
+    )
+    if (mode %in% c("pca", "scree")) {
+      budgets$scree <- c(eps = input$budget_scree_eps, delta = input$budget_scree_delta)
+    }
+    if (mode %in% c("pca", "score")) {
+      budgets$score <- c(eps = input$budget_score_eps, delta = input$budget_score_delta)
+    }
+    return(do.call(privacy_control, budgets))
+  }
+
+  split <- switch(
+    mode,
+    pca = .app_pca_split(input$pca_split_points),
+    scree = c(loading = input$scree_loading_share / 100,
+              scree = 1 - input$scree_loading_share / 100),
+    score = c(loading = input$score_loading_share / 100,
+             score = 1 - input$score_loading_share / 100)
+  )
+  privacy_control(eps = input$eps, delta = input$delta, split = split)
+}
+
+.app_budget <- function(privacy, mode, methods = 1L) {
+  b <- privacy$budgets
+  rows <- list(Loading = b$loading)
+  if (!is.null(b$scree)) rows$Scree <- b$scree
+  if (!is.null(b$score)) {
+    rows[["Score frame"]] <- c(eps = 0.35 * b$score[["eps"]], delta = 0)
+    rows[["Score histogram"]] <- c(
+      eps = 0.65 * b$score[["eps"]], delta = b$score[["delta"]]
+    )
+  }
+  rows[["Total"]] <- privacy$total
+
+  if (methods > 1L && mode == "scree") {
+    rows[["Total (selected methods)"]] <- b$loading + methods * b$scree
+  }
+  if (methods > 1L && mode == "score") {
+    rows[["Total (selected methods)"]] <- b$loading +
+      rows[["Score frame"]] + methods * rows[["Score histogram"]]
+  }
+  .app_budget_table(do.call(rbind, rows))
+}
+
+.app_budget_table <- function(values) {
+  data.frame(
+    Stage = rownames(values),
+    eps = format(signif(values[, "eps"], 4), trim = TRUE),
+    delta = format(values[, "delta"], scientific = TRUE, digits = 3),
+    row.names = NULL,
+    check.names = FALSE
+  )
+}
+
+.app_capture_plot <- function(expr) {
+  previous_device <- grDevices::dev.cur()
+  grDevices::pdf(NULL)
+  device <- grDevices::dev.cur()
+  on.exit({
+    if (device %in% grDevices::dev.list()) {
+      grDevices::dev.off(device)
+    }
+    # Closing the PDF selects the next open device, which may be RStudio.
+    # Explicitly return drawing to the original Shiny graphics device.
+    if (previous_device %in% grDevices::dev.list()) {
+      grDevices::dev.set(previous_device)
+    }
+  }, add = TRUE)
+  force(expr)
+}
+
+.app_result_note <- function(result) {
+  if (is.null(result)) {
+    return(tags$p(class = "result-note", "Choose settings, then click Run analysis."))
+  }
+  tagList(
+    tags$p(
+      class = "result-note",
+      paste0(
+        result$label, " · ", result$n, " observations · ", result$p,
+        " numeric variables"
+      )
+    ),
+    if (length(result$warnings)) tags$div(
+      class = "result-note", style = "white-space: pre-line;",
+      paste0("Warning:\n", paste(result$warnings, collapse = "\n\n"))
+    )
+  )
+}
+
+# Synthetic sampling is plot-only post-processing, never a DP estimation input.
+# In particular, sample_size = NULL is NOT the same as sample_size = n:
+# only NULL keeps original non-private PCA scores in the comparison panel.
+.app_sampling_settings <- function(method, custom_size, size,
+                                   custom_bandwidth, bandwidth) {
+  method <- match.arg(method %||% "uniform", c("uniform", "center"))
+  sample_size <- if (isTRUE(custom_size)) {
+    .app_integer(size, "Sample points", upper = .Machine$integer.max)
+  } else {
+    NULL
+  }
+  bandwidth_scale <- if (isTRUE(custom_bandwidth)) {
+    if (!is.numeric(bandwidth) || length(bandwidth) != 1L ||
+        !is.finite(bandwidth) || bandwidth < 0) {
+      stop("Bandwidth scale must be a finite nonnegative number.", call. = FALSE)
+    }
+    as.numeric(bandwidth)
+  } else {
+    NULL
+  }
+  sampling_control(
+    method = method,
+    sample_size = sample_size,
+    bandwidth_scale = bandwidth_scale
+  )
+}
+
+# Plot controls only redraw stored estimates. A run keeps one sampling seed.
+.app_with_seed <- function(
+    seed,
+    expr
+) {
+  if (
+    !is.numeric(seed) || length(seed) != 1L || !is.finite(seed) ||
+      seed < 0 || seed > .Machine$integer.max || seed != floor(seed)
+  ) {
+    stop("Invalid plot seed.", call. = FALSE)
+  }
+
+  had_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  if (had_seed) {
+    previous_seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  }
+
+  on.exit({
+    if (had_seed) {
+      assign(".Random.seed", previous_seed, envir = .GlobalEnv)
+    } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      rm(".Random.seed", envir = .GlobalEnv)
+    }
+  }, add = TRUE)
+
+  set.seed(seed)
+  force(expr)
+}
+
+# Capture the S3 method's return value without drawing on another device.
+# Reusing a run's seed keeps synthetic points stable when switching views.
+.app_stored_plots <- function(result, center = NULL, sampling = NULL) {
+  plot_args <- result$plot_args
+  if (!is.null(center)) plot_args$center <- center
+  if (!is.null(sampling)) plot_args$sampling_control <- sampling
+  .app_with_seed(result$seed, .app_capture_plot(
+    do.call(plot, c(list(x = result$value), plot_args))
+  ))
+}
+
+.app_pca_plots <- function(
+    fit,
+    seed,
+    variables = 10,
+    biplot_labels = TRUE,
+    loading_display = "vector",
+    score_display = "histogram",
+    center = TRUE,
+    sampling = NULL,
+    base_size = 12
+) {
+  .app_with_seed(seed, .app_capture_plot(
+    plot(
+      x = fit,
+      display = "all",
+      loading = list(type = loading_display),
+      score = list(
+        type = score_display,
+        plot_control = score_plot_control(show_group_legend = TRUE)
+      ),
+      biplot = list(alpha = 0, labels = biplot_labels),
+      center = center,
+      sampling = sampling,
+      variables = variables,
+      base_size = base_size
+    )
+  ))
+}
+
+.app_biplot_plots <- function(
+    fit,
+    seed,
+    alpha = 0,
+    variables = 10,
+    biplot_labels = TRUE,
+    center = TRUE,
+    sampling = NULL,
+    base_size = 12
+) {
+  # Both plot types sample private points before constructing any panels.
+  # Default sampling uses the stored histogram and leaves reference points intact.
+  .app_with_seed(seed, .app_capture_plot(
+    plot(
+      x = fit,
+      display = "biplot",
+      score = list(plot_control = score_plot_control(show_group_legend = TRUE)),
+      biplot = list(alpha = alpha, labels = biplot_labels),
+      center = center,
+      sampling = sampling,
+      variables = variables,
+      base_size = base_size
+    )
+  ))
+}
+
+# Extract one compact, multi-column guide without altering a stored plot.
+.app_right_legend <- function(plot, title = NULL) {
+  if (!inherits(plot, "ggplot")) return(NULL)
+  group <- plot$data$group
+  if (is.null(group) || identical(plot$theme$legend.position, "none")) return(NULL)
+  guide_plot <- plot + ggplot2::theme(
+    legend.position = "right",
+    legend.text = ggplot2::element_text(size = 9),
+    legend.title = ggplot2::element_text(size = 10, face = "bold"),
+    legend.key.height = grid::unit(3, "mm"),
+    legend.key.width = grid::unit(3, "mm")
+  ) + ggplot2::guides(
+    colour = ggplot2::guide_legend(ncol = 1L),
+    fill = ggplot2::guide_legend(ncol = 1L)
+  )
+  if (!is.null(title)) {
+    guide_plot <- guide_plot + ggplot2::labs(colour = title, fill = title)
+  }
+  g <- ggplot2::ggplotGrob(guide_plot)
+  guides <- g$grobs[grepl("^guide-box", g$layout$name)]
+  guides <- Filter(function(x) !inherits(x, "zeroGrob"), guides)
+  if (length(guides)) guides[[1L]] else NULL
+}
+
+.app_pca_overview <- function(plots) {
+  types <- c("scree", "score", "loading", "variable", "biplot")
+  plots <- plots[types]
+  if (length(plots) != length(types) || any(vapply(plots, is.null, logical(1)))) {
+    stop("The stored PCA result does not contain all five plots.", call. = FALSE)
+  }
+  if (!is.null(plots$biplot$data$group)) {
+    plots$score <- plots$score + ggplot2::theme(legend.position = "none")
+  }
+  top <- patchwork::wrap_plots(plots[c("scree", "score", "loading")], ncol = 3L)
+  bottom <- patchwork::wrap_plots(plots[c("variable", "biplot")], ncol = 2L,
+                                  widths = c(1, 1.35))
+  patchwork::wrap_plots(top, bottom, ncol = 1L, heights = c(1, 1))
+}
+
+.app_draw_pca <- function(result, view = "all", version = "private") {
+  types <- c("scree", "score", "loading", "variable", "biplot")
+  view <- match.arg(view, c("all", types))
+  version <- .app_version(version, !is.null(result$nonprivate))
+  versions <- switch(version,
+    private = "private", nonprivate = "nonprivate",
+    compare = c("nonprivate", "private"))
+  if (view == "all") {
+    panes <- lapply(versions, function(nm) .app_pca_overview(result[[nm]]$plots))
+    output <- patchwork::wrap_plots(panes, ncol = 1L)
+  } else {
+    panes <- lapply(versions, function(nm) result[[nm]]$plots[[view]])
+    if (any(vapply(panes, is.null, logical(1)))) {
+      stop("The selected PCA plot was not saved.", call. = FALSE)
+    }
+    output <- patchwork::wrap_plots(panes, ncol = length(panes))
+  }
+  print(output)
+  invisible(output)
+}
+
+# Display helpers use stored fits. Switching panels never reruns DP mechanisms.
+.app_display_options <- function(view, selected, allowed) {
+  if (is.null(view) || identical(view, "all")) {
+    intersect(allowed, selected)
+  } else {
+    intersect(allowed, view)
+  }
+}
+
+.app_version <- function(version, has_reference) {
+  if (!isTRUE(has_reference) || is.null(version) || !nzchar(version)) {
+    return("private")
+  }
+  match.arg(version, c("private", "nonprivate", "compare"))
+}
+
+# Scree uses the saved dp_scree result; Compare overlays the ordinary PCA
+# reference with all selected private methods, matching plot.dp_scree().
+.app_scree_layout <- function(show = "all", version = "private") {
+  kinds <- if (identical(show, "all")) c("pve", "scree") else show
+  # Compare adds a reference curve, not another row of panels.
+  list(columns = length(kinds), rows = 1L)
+}
+
+.app_draw_scree <- function(result, show = "all", version = "private") {
+  show <- match.arg(show, c("all", "pve", "scree"))
+  version <- .app_version(version, !is.null(result$nonprivate))
+  kinds <- if (show == "all") c("pve", "scree") else show
+  private_methods <- intersect(c("clipped", "pmwm", "huber"), names(result))
+  series <- switch(version,
+    private = private_methods,
+    nonprivate = "nonprivate",
+    compare = c("nonprivate", private_methods)
+  )
+  series <- Filter(function(nm) !is.null(result[[nm]]), series)
+  if (!length(series)) {
+    stop("No saved scree estimates for this selection.", call. = FALSE)
+  }
+
+  palette <- c(nonprivate = "black", clipped = "#ED302E",
+               pmwm = "#2F6EB3", huber = "#168579")
+  symbols <- c(nonprivate = 16L, clipped = 17L, pmwm = 15L, huber = 18L)
+  labels <- c(nonprivate = "Non-private", clipped = "Clipped",
+              pmwm = "PMWM", huber = "Huber")
+
+  old_par <- graphics::par(no.readonly = TRUE)
+  on.exit(graphics::par(old_par), add = TRUE)
+  graphics::par(
+    mfrow = c(1L, length(kinds)),
+    mar = c(4.3, 4.5, 3.0, 1.2),
+    oma = c(0, 0, 0, 0), pty = "m"
+  )
+
+  for (kind in kinds) {
+    available <- Filter(function(nm) !is.null(result[[nm]][[kind]]), series)
+    if (!length(available)) {
+      stop("No saved scree estimates for this selection.", call. = FALSE)
+    }
+    values <- lapply(available, function(nm) as.numeric(result[[nm]][[kind]]))
+    names(values) <- available
+    n <- length(values[[1L]])
+    if (!n || any(lengths(values) != n)) {
+      stop("Stored scree values are missing or have inconsistent lengths.",
+           call. = FALSE)
+    }
+    limits <- unlist(values, use.names = FALSE)
+    limits <- limits[is.finite(limits)]
+    if (!length(limits)) stop("No finite scree values.", call. = FALSE)
+    ylim <- range(c(0, limits))
+    spread <- diff(ylim)
+    if (spread <= 0) spread <- max(0.1, abs(ylim[2L]) * 0.1)
+    ylim <- ylim + c(-0.04, 0.12) * spread
+    if (kind == "pve") ylim[1L] <- max(0, ylim[1L])
+
+    title <- paste0(
+      if (version == "private") "DP " else if (version == "nonprivate") "Non-private " else "",
+      if (kind == "pve") "PVE Plot" else "Eigenvalues"
+    )
+    first <- available[1L]
+    graphics::plot(
+      seq_len(n), values[[first]], type = "b",
+      col = palette[[first]], pch = symbols[[first]],
+      lwd = 1.5, cex = 0.9, xaxt = "n", ylim = ylim,
+      xlab = "Component", ylab = if (kind == "pve") "PVE" else "Eigenvalue",
+      main = title, cex.main = 1.05
+    )
+    graphics::axis(1L, at = seq_len(n), labels = seq_len(n))
+    for (nm in available[-1L]) {
+      graphics::lines(seq_len(n), values[[nm]], type = "b",
+                      col = palette[[nm]], pch = symbols[[nm]],
+                      lwd = 1.5, cex = 0.9)
+    }
+    # One legend per chart, with the non-private reference and DP methods.
+    if (length(available) > 1L) {
+      graphics::legend("topright", inset = 0.01,
+                       legend = labels[available], col = palette[available],
+                       pch = symbols[available], lty = 1, bty = "n",
+                       cex = 0.85, lwd = 1.4)
+    }
+  }
+  invisible(NULL)
+}
+
+.app_score_keys <- function(result, version) {
+  stored <- result$plot
+  methods <- intersect(c("add", "sparse"), names(stored))
+  has_reference <- !is.null(stored$nonprivate)
+  version <- .app_version(version, has_reference)
+  switch(version,
+    private = methods,
+    nonprivate = "reference",
+    compare = c("reference", methods)
+  )
+}
+
+.app_score_layout <- function(n_keys, n_displays, version = "private") {
+  total <- max(1L, n_keys * n_displays)
+  if (version == "compare" && n_displays == 1L) {
+    # A single requested display: Non-private / Add / Sparse side by side.
+    # Do not stretch three small square ggplots across three tall rows.
+    columns <- min(3L, total)
+  } else if (version == "compare") {
+    # Overview: one reference row, followed by one row per DP method.
+    columns <- n_displays
+  } else {
+    # Two selected plots appear side-by-side, not stacked at bottom-left.
+    columns <- min(2L, total)
+  }
+  list(columns = columns, rows = as.integer(ceiling(total / columns)))
+}
+
+.app_draw_score <- function(result, display = "histogram", version = "private",
+                            sample_method = "uniform") {
+  sample_method <- match.arg(sample_method, c("uniform", "center"))
+  choices <- c("histogram", "sample")
+  if (!length(display) || anyNA(display) || any(!display %in% choices)) {
+    stop("Choose at least one score display: histogram or sample.", call. = FALSE)
+  }
+  display <- intersect(choices, display)
+  stored <- result$plot
+  has_reference <- !is.null(stored$nonprivate)
+  version <- .app_version(version, has_reference)
+  keys <- .app_score_keys(result, version)
+  if (!length(keys)) stop("No stored score plots were found.", call. = FALSE)
+  grouped <- !is.null(result$group_colors)
+
+  panels <- unlist(lapply(keys, function(key) {
+    lapply(display, function(tp) {
+      if (key == "reference") {
+        if (tp == "histogram") p <- stored$nonprivate else {
+          p <- stored$reference_samples[[sample_method]]
+          if (is.null(p)) p <- stored$scatter
+        }
+      } else if (tp == "histogram") {
+        p <- stored[[key]]
+      } else {
+        p <- stored$sample[[key]][[sample_method]]
+      }
+      if (is.null(p)) stop("The selected score plot was not saved.", call. = FALSE)
+      if (grouped) {
+        # Keep each method's own group legend: the Add, Sparse, and
+        # non-private plots need not have identical group displays.
+        # When both displays are shown, the sample carries that method's
+        # legend; when only histograms are shown, the histogram carries it.
+        # Never suppress a later method's legend just because an earlier
+        # method has already displayed one.
+        show_legend <- if ("sample" %in% display) {
+          tp == "sample"
+        } else {
+          tp == "histogram"
+        }
+        p <- p + ggplot2::theme(
+          legend.position = if (show_legend) "right" else "none"
+        )
+      }
+      p
+    })
+  }), recursive = FALSE)
+  layout <- .app_score_layout(length(keys), length(display), version)
+  output <- patchwork::wrap_plots(panels, ncol = layout$columns,
+                                  byrow = TRUE, guides = "keep")
+  print(output)
+  invisible(output)
+}
+
+.app_loading_layout <- function(n_displays, n_versions) {
+  columns <- max(1L, as.integer(n_displays))
+  list(columns = columns, rows = max(1L, as.integer(n_versions)))
+}
+
+.app_draw_loading <- function(result, display = c("vector", "point", "heatmap"),
+                              version = "private") {
+  choices <- c("vector", "point", "heatmap")
+  if (!length(display) || anyNA(display) || any(!display %in% choices)) {
+    stop("Choose at least one loading display.", call. = FALSE)
+  }
+  display <- intersect(choices, display)
+  stored <- result$plot
+  has_reference <- !is.null(stored$nonprivate) && length(stored$nonprivate) > 0L
+  version <- .app_version(version, has_reference)
+  versions <- switch(version,
+    compare = c("nonprivate", "private"),
+    nonprivate = "nonprivate", private = "private"
+  )
+
+  # IMPORTANT: rows = versions, columns = display types.
+  # For Compare: Non-private (Vector, Point, Heatmap) followed by
+  # DP (Vector, Point, Heatmap). No global heatmap legend collection:
+  # a colorbar belongs to its own heatmap, not to all three figures.
+  plots <- unlist(lapply(versions, function(nm) {
+    lapply(display, function(tp) {
+      selected <- stored[[nm]][[tp]]
+      if (is.null(selected)) {
+        stop("The selected loading plot is missing from the saved result.",
+             call. = FALSE)
+      }
+      selected
+    })
+  }), recursive = FALSE)
+  layout <- .app_loading_layout(length(display), length(versions))
+  combined <- patchwork::wrap_plots(
+    plots, ncol = layout$columns, byrow = TRUE, guides = "keep"
+  )
+  print(combined)
+  invisible(combined)
+}
+
+# Summaries use saved results and the package's S3 methods.
+.app_summary_text <- function(fit, version = "private", mode = NULL) {
+  version <- .app_version(version, !is.null(fit$nonprivate))
+  captured <- tryCatch({
+    if (identical(mode, "loading")) {
+      if (version == "nonprivate") {
+        V <- fit$nonprivate
+        rows <- seq_len(min(10L, nrow(V)))
+        cols <- seq_len(min(6L, ncol(V)))
+        c("Non-private PC directions (first 10 variables and 6 PCs):",
+          capture.output(print(V[rows, cols, drop = FALSE], digits = 4)),
+          "", paste("Total variables:", nrow(V), "/ PCs:", ncol(V)))
+      } else {
+        filtered <- fit
+        if (version == "private") filtered$nonprivate <- NULL
+        capture.output(print(summary(filtered)))
+      }
+    } else if (identical(mode, "scree")) {
+      if (version == "nonprivate") {
+        ref <- fit$nonprivate
+        info <- data.frame(
+          Component = names(ref$scree) %||% paste0("PC", seq_along(ref$scree)),
+          Eigenvalue = as.numeric(ref$scree),
+          PVE = as.numeric(ref$pve),
+          Cumulative_PVE = cumsum(ref$pve)
+        )
+        capture.output(print(info, row.names = FALSE, digits = 4))
+      } else {
+        filtered <- fit
+        if (version == "private") filtered$nonprivate <- NULL
+        capture.output(print(summary(filtered)))
+      }
+    } else if (identical(mode, "score")) {
+      if (version == "nonprivate") {
+        full <- summary(fit)
+        tbl <- full$histograms
+        if (!is.null(tbl) && "method" %in% names(tbl)) {
+          tbl <- tbl[tbl$method == "nonprivate", , drop = FALSE]
+          c("Non-private score histogram summary:",
+            capture.output(print(tbl, row.names = FALSE, digits = 4)))
+        } else {
+          capture.output(str(fit$nonprivate, max.level = 2L, vec.len = 6L))
+        }
+      } else {
+        overview <- summary(fit)
+        if (version == "private" &&
+            !is.null(overview$histograms) &&
+            "method" %in% names(overview$histograms)) {
+          overview$histograms <- overview$histograms[
+            overview$histograms$method != "nonprivate", , drop = FALSE]
+        }
+        capture.output(print(overview))
+      }
+    } else {
+      capture.output(print(summary(fit)))
+    }
+  }, error = function(e) paste("Summary could not be formatted:", conditionMessage(e)))
+  if (!length(captured)) return("No summary available for this result.")
+  if (length(captured) > 140L) {
+    captured <- c(captured[seq_len(140L)], "... (additional output omitted)")
+  }
+  paste(captured, collapse = "\n")
+}
+
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
+.app_plot_height <- function(width, columns = 1L, rows = 1L,
+                             min_panel = 265, max_panel = 420, ratio = 0.9) {
+  if (length(width) != 1L || !is.finite(width) || width <= 0) width <- 750
+  columns <- max(1L, as.integer(columns))
+  rows <- max(1L, as.integer(rows))
+  panel_height <- min(max_panel, max(min_panel, round(width / columns * ratio)))
+  as.integer(rows * panel_height + 20L)
+}
+
+# A single budget bar, with one movable divider on each side of Scree.
+# One draggable allocation slider with three directly editable percentages.
+# The slider is the single Shiny input used to compute the actual budget.
+.app_pca_split_control <- function() {
+  div(
+    class = "pca-split",
+    tags$style(HTML("
+      .pca-split .shiny-input-container { width: 100%; margin-bottom: 0; }
+      .pca-split .irs { height: 34px; }
+      .pca-split .irs-line { top: 14px; height: 10px; border: 0; }
+      .pca-split .irs-bar { top: 14px; height: 10px; background: transparent; border: 0; }
+      .pca-split .irs-handle { top: 8px; }
+      .pca-split .irs-from, .pca-split .irs-to, .pca-split .irs-single,
+      .pca-split .irs-min, .pca-split .irs-max { display: none; }
+      .pca-shares { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 9px; margin: 4px 0 8px; }
+      .pca-share label { display: block; font-size: 11px; font-weight: 600;
+        color: var(--ink); margin-bottom: 4px; white-space: nowrap; }
+      .pca-share label::before { content: ''; display: inline-block; width: 7px;
+        height: 7px; border-radius: 2px; margin-right: 5px; }
+      .pca-share.loading label::before { background: #187b79; }
+      .pca-share.scree label::before { background: #6688b0; }
+      .pca-share.score label::before { background: #bc8642; }
+      .pca-share .pct-wrap { display: flex; align-items: center; border: 1px solid #d2dce5;
+        border-radius: 6px; background: white; padding-right: 7px; }
+      .pca-share .pct-wrap:focus-within { border-color: #187b79; }
+      .pca-share input { min-width: 0; width: 100%; border: none; border-radius: 6px;
+        height: 32px; padding: 5px 3px 5px 8px; font-size: 12px; outline: none; }
+      .pca-share .pct-wrap span { font-size: 11px; color: #62758a; }
+    ")),
+    sliderInput(
+      "pca_split_points", "Budget proportions",
+      min = 0, max = 100, value = c(33.3, 66.7), step = 0.1,
+      ticks = FALSE, dragRange = FALSE
+    ),
+    div(class = "pca-shares",
+      div(class = "pca-share loading", tags$label(`for` = "pca_loading_pct", "Loading"),
+        div(class = "pct-wrap", tags$input(id = "pca_loading_pct", type = "number",
+          min = "0.1", max = "99.8", step = "0.1", value = "33.3"), span("%"))),
+      div(class = "pca-share scree", tags$label(`for` = "pca_scree_pct", "Scree"),
+        div(class = "pct-wrap", tags$input(id = "pca_scree_pct", type = "number",
+          min = "0.1", max = "99.8", step = "0.1", value = "33.4"), span("%"))),
+      div(class = "pca-share score", tags$label(`for` = "pca_score_pct", "Score"),
+        div(class = "pct-wrap", tags$input(id = "pca_score_pct", type = "number",
+          min = "0.1", max = "99.8", step = "0.1", value = "33.3"), span("%")))
+    ),
+    tags$script(HTML("
+      function initBudgetShares() {
+        var input = $('#pca_split_points');
+        var slider = input.data('ionRangeSlider');
+        if (!slider || input.data('budgetSharesReady')) return;
+        input.data('budgetSharesReady', true);
+        var ids = ['#pca_loading_pct', '#pca_scree_pct', '#pca_score_pct'];
+        var colors = ['#187b79', '#6688b0', '#bc8642'];
+        slider.update({ from_min: 0.1, to_max: 99.9, min_interval: 0.1 });
+
+        function currentShares() {
+          return [slider.result.from, slider.result.to - slider.result.from,
+                  100 - slider.result.to];
+        }
+        function syncFromSlider() {
+          var values = currentShares();
+          for (var i = 0; i < 3; i++) $(ids[i]).val(values[i].toFixed(1));
+          var left = slider.result.from;
+          var right = slider.result.to;
+          input.closest('.pca-split').find('.irs-line').css('background',
+            'linear-gradient(to right, ' +
+            colors[0] + ' 0%, ' + colors[0] + ' ' + left + '%, ' +
+            colors[1] + ' ' + left + '%, ' + colors[1] + ' ' + right + '%, ' +
+            colors[2] + ' ' + right + '%, ' + colors[2] + ' 100%)');
+        }
+        input.off('change.budgetShares').on('change.budgetShares', syncFromSlider);
+        ids.forEach(function(id, changed) {
+          $(id).off('change.budgetShares').on('change.budgetShares', function() {
+            var entered = Number($(id).val());
+            var shares = currentShares();
+            if (!Number.isFinite(entered) || entered < 0.1 || entered > 99.8) {
+              syncFromSlider(); return;
+            }
+            entered = Math.round(entered * 10) / 10;
+            if (changed === 0) {
+              shares[0] = entered;
+              shares[2] = 100 - shares[0] - shares[1];
+            } else if (changed === 1) {
+              shares[1] = entered;
+              shares[2] = 100 - shares[0] - shares[1];
+            } else {
+              shares[2] = entered;
+              shares[1] = 100 - shares[0] - shares[2];
+            }
+            if (shares.some(function(x) { return x < 0.099999; })) {
+              syncFromSlider(); return;
+            }
+            slider.update({ from: Math.round(shares[0] * 10) / 10,
+              to: Math.round((shares[0] + shares[1]) * 10) / 10 });
+            // Ion.RangeSlider's programmatic update does not always emit a
+            // Shiny change event. Notify the binding explicitly.
+            input.trigger('change');
+            syncFromSlider();
+          });
+        });
+        syncFromSlider();
+      }
+      $(initBudgetShares);
+      $(document).on('shiny:connected.budgetShares', initBudgetShares);
+    "))
+  )
+}
+
+
+# Two-part budget control for standalone Scree and Score analyses.
+# Shiny uses only the slider value; editable percentages update that slider.
+.app_two_split_control <- function(mode) {
+  stopifnot(mode %in% c("scree", "score"))
+  label <- if (mode == "scree") "Scree" else "Score"
+  slider_id <- paste0(mode, "_loading_share")
+  loading_id <- paste0(mode, "_loading_pct")
+  method_id <- paste0(mode, "_method_pct")
+  script <- "
+    function initializeTwoShare_@MODE@() {
+      var input = $('#@MODE@_loading_share');
+      var slider = input.data('ionRangeSlider');
+      if (!slider || input.data('twoSharesReady')) return;
+      input.data('twoSharesReady', true);
+      var loading = $('#@MODE@_loading_pct');
+      var method = $('#@MODE@_method_pct');
+      var container = input.closest('.two-split');
+      var color = '@COLOR@';
+      function sync() {
+        var left = slider.result.from;
+        loading.val(left.toFixed(1));
+        method.val((100 - left).toFixed(1));
+        container.find('.irs-line').css('background',
+          'linear-gradient(to right, #187b79 0%, #187b79 ' + left + '%, ' +
+          color + ' ' + left + '%, ' + color + ' 100%)');
+      }
+      input.off('change.twoShares').on('change.twoShares', sync);
+      function update(changed) {
+        var entered = Number(changed.val());
+        if (!Number.isFinite(entered) || entered < 0.1 || entered > 99.9) {
+          sync(); return;
+        }
+        entered = Math.round(entered * 10) / 10;
+        var next = changed.is(loading) ? entered : 100 - entered;
+        slider.update({ from: Math.round(next * 10) / 10 });
+        input.trigger('change');
+        sync();
+      }
+      loading.off('change.twoShares').on('change.twoShares', function(){ update(loading); });
+      method.off('change.twoShares').on('change.twoShares', function(){ update(method); });
+      sync();
+    }
+    $(initializeTwoShare_@MODE@);
+    $(document).on('shiny:connected.twoShares', initializeTwoShare_@MODE@);
+  "
+  script <- gsub("@MODE@", mode, script, fixed = TRUE)
+  script <- gsub("@COLOR@", if (mode == "scree") "#6688b0" else "#bc8642", script, fixed = TRUE)
+  div(
+    class = "pca-split two-split",
+    sliderInput(slider_id, "Budget proportions", min = 0.1, max = 99.9,
+                value = 50, step = 0.1, ticks = FALSE),
+    div(class = "pca-shares two-shares",
+      div(class = "pca-share loading",
+        tags$label(`for` = loading_id, "Loading"),
+        div(class = "pct-wrap", tags$input(id = loading_id, type = "number",
+          min = "0.1", max = "99.9", step = "0.1", value = "50.0"), span("%"))),
+      div(class = paste("pca-share", mode),
+        tags$label(`for` = method_id, label),
+        div(class = "pct-wrap", tags$input(id = method_id, type = "number",
+          min = "0.1", max = "99.9", step = "0.1", value = "50.0"), span("%")))
+    ),
+    tags$script(HTML(script))
+  )
+}
+
+# Shared controls for the two views that estimate eigenvalues.
+.app_scree_controls <- function() {
+  div(
+    class = "scree-method-fields",
+    conditionalPanel(
+      condition = "input.analysis == 'scree'",
+      tags$hr(class = "scree-method-divider")
+    ),
+    div(
+      conditionalPanel(
+        condition = "(input.analysis == 'pca' && input.pca_scree_method == 'clipped') || (input.analysis == 'scree' && input.scree_methods && input.scree_methods.indexOf('clipped') >= 0)",
+        conditionalPanel(
+          condition = "input.analysis == 'scree'",
+          div(class = "control-caption scree-method-name", "Clipped")
+        ),
+        numericInput("C_clip", "C_clip (Clipping threshold)", value = 3, min = 1e-6, step = 0.5)
+      ),
+      conditionalPanel(
+        condition = "(input.analysis == 'pca' && input.pca_scree_method == 'pmwm') || (input.analysis == 'scree' && input.scree_methods && input.scree_methods.indexOf('pmwm') >= 0)",
+        conditionalPanel(
+          condition = "input.analysis == 'scree'",
+          div(class = "control-caption scree-method-name", "PMWM")
+        ),
+        numericInput("pmwm_beta", "beta (Shape parameter)", value = 1.001, min = 1.000001, step = 0.001),
+        div(
+          class = "control-pair",
+          numericInput("pmwm_a", "a (Lower bound)", value = 0, step = 1),
+          numericInput("pmwm_b", "b (Upper bound)", value = 10, step = 1)
+        ),
+        numericInput("pmwm_trim_const", "trim_const (Trim constant)", value = 10, min = 0, step = 1),
+        numericInput("pmwm_eta", "eta (Trimming fraction)", value = 0.01, min = 0, max = 0.49, step = 0.01),
+        checkboxInput("pmwm_split_mode", "split_mode (Split mode)", value = TRUE)
+      ),
+      conditionalPanel(
+        condition = "(input.analysis == 'pca' && input.pca_scree_method == 'huber') || (input.analysis == 'scree' && input.scree_methods && input.scree_methods.indexOf('huber') >= 0)",
+        conditionalPanel(
+          condition = "input.analysis == 'scree'",
+          div(class = "control-caption scree-method-name", "Huber")
+        ),
+        div(
+          class = "control-pair",
+          numericInput("huber_mu0", "mu0 (Initial mean)", value = 0, step = 0.5),
+          numericInput("huber_eta0", "eta0 (Initial scale)", value = 1, min = 1e-8, step = 0.1)
+        ),
+        div(
+          class = "control-pair",
+          numericInput("huber_T", "T (Iterations)", value = 50, min = 1, step = 1),
+          numericInput("huber_M", "M (Huber parameter)", value = 20, min = 1, step = 1)
+        ),
+        div(
+          class = "control-pair",
+          numericInput("huber_k_min_m2", "k_min_m2 (Lower search bound)", value = -20, step = 1),
+          numericInput("huber_k_max_m2", "k_max_m2 (Upper search bound)", value = 20, step = 1)
+        ),
+        numericInput("huber_m2_frac", "m2_frac (Second-moment budget share)", value = 0.25, min = 1e-6, max = 0.99, step = 0.05)
+      ),
+      checkboxInput("mono", "Monotone eigenvalue post-processing", value = TRUE)
+    )
+  )
+}
 
 ui <- fluidPage(
   tags$head(
     tags$style(HTML("
+      :root {
+        --navy: #172d48;
+        --teal: #187b79;
+        --ink: #24364a;
+        --muted: #62758a;
+        --line: #dce5ec;
+        --canvas: #f3f6f8;
+      }
       body {
-        background: #f7f8fb;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
       }
-      .app-title {
-        margin-bottom: 14px;
+      .container-fluid { max-width: 1760px; padding: 0 28px 36px; }
+      .app-header {
+        display: flex;
+        align-items: center;
+        gap: 17px;
+        padding: 29px 0 25px;
       }
-      .well {
-        background: #ffffff;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-      }
-      .main-plot-area {
-        max-width: 1160px;
-        margin: 0 auto;
-      }
-      .plot-card {
-        background: #ffffff;
-        border: 1px solid #e5e7eb;
+      .app-wordmark {
+        background: var(--navy);
+        color: #fff;
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        padding: 15px 16px;
         border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
-        padding: 16px 18px 18px 18px;
-        margin-bottom: 24px;
       }
-      .plot-card-scree {
-        max-width: 980px;
-        margin-left: auto;
-        margin-right: auto;
+      .app-header h1 { margin: 0 0 4px; color: var(--navy); font-size: 25px; font-weight: 650; }
+      .app-header p { margin: 0; color: var(--muted); font-size: 14px; }
+      .well {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 3px 14px rgba(23, 45, 72, .035);
+        padding: 20px;
       }
-      .plot-card-score {
-        max-width: 1120px;
-        margin-left: auto;
-        margin-right: auto;
-      }
-      .plot-card h4 {
-        margin-top: 0;
-        margin-bottom: 12px;
-        font-weight: 600;
-        color: #1f2937;
-      }
-      .plot-card-note {
-        margin-top: -4px;
-        margin-bottom: 10px;
-        color: #6b7280;
+      .app-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 24px; align-items: start; }
+      .app-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; margin-bottom: 0; }
+      .control-column, .app-results { min-width: 0; }
+      .control-column:first-child { padding-right: 20px; }
+      .control-column + .control-column { border-left: 1px solid var(--line); padding-left: 20px; }
+      .app-controls .shiny-input-container { width: 100%; max-width: 100%; min-width: 0; }
+      .sidebar-heading {
+        margin: 0 0 13px;
         font-size: 12px;
+        font-weight: 750;
+        letter-spacing: .085em;
+        text-transform: uppercase;
+        color: var(--navy);
       }
-      details.control-details {
-        margin-top: 12px;
-        margin-bottom: 10px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        background: #ffffff;
-      }
-      details.control-details summary {
+      .control-section + .control-section { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 20px; }
+      .form-group { margin-bottom: 13px; }
+      .control-label { font-size: 12px; font-weight: 600; }
+      .form-control, .selectize-input { border-color: #d2dce5; border-radius: 6px; box-shadow: none; }
+      .form-control:focus, .selectize-input.focus { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(24, 123, 121, .1); }
+      .checkbox label, .radio label { font-size: 12px; line-height: 1.5; }
+      input[type='checkbox'], input[type='radio'] { accent-color: var(--teal); }
+      .help-block { color: var(--muted); font-size: 11px; line-height: 1.55; }
+      .control-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+      .control-pair > .shiny-input-container { width: 100%; min-width: 0; }
+      .control-caption { color: var(--teal); font-size: 12px; font-weight: 700; margin: 8px 0 10px; }
+      .app-details { border-top: 1px solid var(--line); margin: 14px 0 0; }
+      .app-details > summary {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 5px;
+        border-radius: 5px;
+        font-size: 12px;
+        font-weight: 650;
+        color: var(--navy);
         cursor: pointer;
-        font-weight: 600;
-        padding: 8px 10px;
         list-style: none;
-        user-select: none;
       }
-      details.control-details summary::-webkit-details-marker {
-        display: none;
+      .app-details > summary::-webkit-details-marker { display: none; }
+      .app-details > summary::marker { content: ''; }
+      .app-details > summary::before {
+        content: '';
+        flex: 0 0 7px;
+        width: 7px;
+        height: 7px;
+        border-right: 2px solid var(--teal);
+        border-bottom: 2px solid var(--teal);
+        transform: rotate(-45deg);
       }
-      details.control-details summary::before {
-        content: '▶ ';
-        display: inline-block;
-        width: 1.2em;
+      .app-details[open] > summary::before { transform: rotate(45deg); }
+      .app-details > summary:hover { background: #eef5f6; }
+      .app-details > summary:focus-visible {
+        background: #eef5f6;
+        outline: 2px solid var(--teal);
+        outline-offset: 2px;
       }
-      details.control-details[open] summary::before {
-        content: '▼ ';
+      .preprocessing-details { border-top: 0; margin: 0; }
+      .details-body { padding: 1px 0 7px; }
+      .run-area { border-top: 1px solid var(--line); padding-top: 18px; margin-top: 20px; }
+      .btn-primary { background: var(--teal); border-color: var(--teal); font-weight: 650; }
+      .btn-primary:hover, .btn-primary:focus, .btn-primary:active { background: #116563; border-color: #116563; }
+      #run { width: 100%; min-height: 42px; border-radius: 7px; }
+      .nav-pills { background: #e7edf2; padding: 5px; border-radius: 11px; margin-bottom: 20px; display: flex; gap: 4px; }
+      .nav-pills > li { float: none; flex: 1; text-align: center; margin: 0 !important; }
+      .nav-pills > li > a { border-radius: 7px; color: #566a80; font-size: 13px; font-weight: 650; padding: 11px 13px; }
+      .nav-pills > li.active > a, .nav-pills > li.active > a:hover, .nav-pills > li.active > a:focus {
+        background: var(--navy); color: #fff; box-shadow: 0 2px 5px rgba(23, 45, 72, .12);
       }
-      details.control-details .control-body {
-        padding: 0 10px 10px 10px;
+      .nav-pills > li > a:hover { background: #dce6ee; }
+      .result-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 23px 24px; box-shadow: 0 3px 14px rgba(23, 45, 72, .035); margin-bottom: 20px; }
+      .card-heading { margin: 0 0 5px; color: var(--navy); font-size: 21px; font-weight: 650; }
+      .result-status { border-left: 3px solid #89c0bb; background: #f4f9f9; color: #4f6a73; font-size: 12px; padding: 9px 12px; margin: 13px 0 19px; border-radius: 0 6px 6px 0; }
+      .plot-toolbar { display: flex; align-items: end; flex-wrap: wrap; column-gap: 20px; row-gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 10px; }
+      .plot-toolbar > .shiny-input-container { width: 230px; }
+      .plot-toolbar .shiny-input-radiogroup { width: auto; }
+      .plot-toolbar .shiny-input-radiogroup label { white-space: nowrap; }
+      .plot-toolbar > .shiny-panel-conditional { max-width: 100%; }
+      .plot-toolbar > .shiny-panel-conditional:last-child { margin-left: auto; }
+      .toolbar-alpha { width: 210px; max-width: 100%; }
+      .toolbar-alpha .shiny-input-container { width: 100%; }
+      .plot-settings-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px 22px; }
+      .plot-settings-grid .shiny-input-container { max-width: 100%; }
+      .plot-area { min-height: 360px; overflow: auto; }
+      .pca-plot-area { min-height: 400px; overflow: visible; margin-top: 0; }
+      .two-split .pca-shares { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .two-split .irs--shiny .irs-bar { background: transparent; border: 0; }
+      .plot-toolbar { position: relative; z-index: 3; }
+      .toolbar-plot-settings {
+        position: relative; margin: 0 0 12px; border: 0;
+        min-width: 145px;
+      }
+      .toolbar-plot-settings > summary {
+        padding: 9px 13px; border: 1px solid var(--line);
+        background: #f6f9fa; border-radius: 7px;
+      }
+      .toolbar-plot-settings[open] > summary {
+        background: #e9f3f3; border-color: #a1c6c2;
+      }
+      .toolbar-plot-settings .details-body {
+        position: absolute; z-index: 30; top: calc(100% + 6px); right: 0;
+        width: min(510px, calc(100vw - 65px));
+        padding: 18px 18px 10px; border: 1px solid var(--line);
+        border-radius: 10px; background: #fff;
+        box-shadow: 0 10px 32px rgba(23,45,72,.16);
+      }
+      .plot-settings-grid { align-items: start; }
+      .plot-settings-grid .settings-subheading {
+        grid-column: 1 / -1; border-top: 1px solid var(--line);
+        padding-top: 9px; color: var(--teal); font-size: 12px;
+        font-weight: 700; margin-top: 2px;
+      }
+      .toolbar-plot-settings .plot-settings-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .toolbar-plot-settings .shiny-input-container { width: 100%; min-width: 0; }
+      .toolbar-plot-settings .irs { margin-top: 3px; }
+      /* Sampling settings use the full popover width on both PCA and Score. */
+      .toolbar-plot-settings .sampling-controls {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 13px;
+        min-width: 0;
+        padding: 0 0 3px;
+      }
+      .toolbar-plot-settings .sampling-method > .shiny-input-container {
+        width: 100%; margin-bottom: 0;
+      }
+      .toolbar-plot-settings .sampling-method .control-label { margin-bottom: 7px; }
+      .toolbar-plot-settings .sampling-method .radio-inline {
+        margin-right: 20px; margin-bottom: 2px; white-space: nowrap;
+      }
+      .toolbar-plot-settings .sampling-option-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        column-gap: 16px;
+        align-items: center;
+        min-height: 35px;
+        min-width: 0;
+      }
+      .toolbar-plot-settings .sampling-option-row > .shiny-input-container {
+        width: 100%; margin-bottom: 0;
+      }
+      .toolbar-plot-settings .sampling-option-row .checkbox { margin: 0; }
+      .toolbar-plot-settings .sampling-option-row > .shiny-panel-conditional {
+        width: 100%; min-width: 0;
+      }
+      .toolbar-plot-settings .sampling-option-row > .shiny-panel-conditional .shiny-input-container {
+        margin-bottom: 0;
+      }
+      .toolbar-plot-settings .sampling-option-row .control-label { margin-bottom: 5px; }
+      @media (max-width: 520px) {
+        .toolbar-plot-settings .sampling-option-row { grid-template-columns: 1fr; row-gap: 5px; }
+      }
+      .pca-plot-area .shiny-plot-output { display: block; }
+      .cpp-setting { border-top: 1px solid var(--line); padding-top: 11px;
+        margin-top: 8px; }
+      .scree-method-fields { border-top: 0; padding-top: 0;
+        margin: 0 0 12px; }
+      .scree-method-divider { border: 0; border-top: 1px solid var(--line);
+        margin: 10px 0 14px; }
+      .scree-method-fields .scree-method-name { margin: 12px 0 8px; }
+      .scree-method-fields > div { min-width: 0; }
+       .scree-plot-area { width: 100%; max-width: 100%; margin: 0; }
+      .plot-area { min-height: 0; padding-top: 6px; overflow: visible; }
+      .plot-area .shiny-plot-output { display: block; }
+      .compact-plot { width: 100%; margin: 0 auto; }
+      .compact-plot .shiny-plot-output { margin: 0 auto; }
+      .compact-plot.plot-cols-1 { max-width: 470px; }
+      .compact-plot.plot-cols-2 { max-width: 870px; }
+      .compact-plot.plot-cols-3 { max-width: 1180px; }
+      .summary-view, .data-view { padding: 6px 0 0; }
+      .data-view { max-width: 950px; }
+      .data-view .result-status { margin: 0 0 16px; }
+      .data-view .data-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 18px; }
+      .data-view .data-line { color: var(--muted); font-size: 13px; padding: 8px 10px;
+        background: #f5f8fa; border: 1px solid var(--line); border-radius: 6px; overflow-wrap: anywhere; }
+      .data-view .data-line strong { display: block; margin-bottom: 3px; color: var(--navy); font-size: 12px; }
+      .data-view .data-columns { font-size: 12px; line-height: 1.8; color: var(--muted);
+        background: #f8fafb; border: 1px solid var(--line); border-radius: 6px;
+        padding: 11px 14px; overflow-wrap: anywhere; }
+      .data-view h3 { font-size: 14px; font-weight: 650; color: var(--navy); margin: 18px 0 10px; }
+      @media (max-width: 650px) { .data-view .data-grid { grid-template-columns: 1fr; } }
+      .summary-view pre { border: 1px solid var(--line); border-radius: 8px;
+        background: #f7fafb; padding: 15px; font-size: 12px;
+        white-space: pre-wrap; word-break: break-word; max-height: 650px; overflow: auto; }
+      .plot-toolbar { align-items: center; margin-top: 6px; margin-bottom: 6px; }
+      .plot-toolbar > .shiny-input-container { margin-bottom: 7px; }
+      .result-status { margin-bottom: 11px; }
+      .result-note { margin-bottom: 5px; }
+      .solo-toolbar > .shiny-input-container { width: 235px; max-width: 100%; }
+      .reference-choice .shiny-input-container { width: auto; max-width: 100%; }
+      .reference-choice .shiny-input-radiogroup { width: auto; }
+      .reference-choice .shiny-input-radiogroup .radio { margin-right: 12px; }
+      .plot-area .shiny-output-error-validation { padding: 50px 20px; font-size: 14px; color: var(--muted); text-align: center; }
+      .table-wrap { overflow-x: auto; }
+      .table { font-size: 12px; }
+      .table > thead > tr > th { border-bottom: 1px solid var(--line); color: var(--navy); }
+      .summary-heading { font-size: 14px; color: var(--navy); font-weight: 650; margin: 23px 0 12px; }
+      .fit-info { color: var(--muted); font-size: 12px; margin-top: 18px; }
+      .irs--shiny .irs-bar, .irs--shiny .irs-single { background: var(--teal); border-color: var(--teal); }
+      @media (max-width: 1600px) {
+        .budget-pair { grid-template-columns: 1fr; gap: 0; }
+      }
+      @media (max-width: 1400px) {
+        .control-pair { grid-template-columns: 1fr; gap: 0; }
+      }
+      @media (max-width: 1100px) {
+        .container-fluid { padding-right: 18px; padding-left: 18px; }
+        .app-layout { grid-template-columns: 1fr; }
+        .well { padding: 16px; }
+        .control-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .plot-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .result-card { padding: 20px; }
+      }
+      @media (max-width: 767px) {
+        .app-header { align-items: flex-start; padding-top: 22px; gap: 12px; }
+        .app-header h1 { font-size: 22px; }
+        .app-header p { font-size: 12px; }
+        .app-wordmark { font-size: 14px; padding: 13px 11px; }
+        .control-pair, .plot-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .nav-pills > li > a { padding: 10px 6px; font-size: 12px; }
+        .result-card { padding: 18px 15px; }
+        .plot-toolbar { gap: 4px 16px; }
+      }
+      @media (max-width: 600px) {
+        .app-controls { grid-template-columns: 1fr; }
+        .control-column:first-child { padding-right: 0; }
+        .control-column + .control-column { border-left: 0; border-top: 1px solid var(--line); padding: 20px 0 0; margin-top: 20px; }
+      }
+      @media (max-width: 420px) {
+        .control-pair, .plot-settings-grid { grid-template-columns: 1fr; gap: 0; }
       }
     "))
   ),
 
-  div(class = "app-title", h2("dppca: Differentially Private PCA Visualization")),
+  div(
+    class = "app-header",
+    div(class = "app-wordmark", "dppca"),
+    div(
+      h1("DP-PCA"),
+      p("Estimate and visualize private PC directions, variation, and score distributions.")
+    )
+  ),
 
-  sidebarLayout(
-    sidebarPanel(
-      width = 4,
-
-      h4("Data"),
-      radioButtons(
-        "data_source", "Data source",
-        choices = if (.has_supplied_data) {
-          c("Provided data" = "provided", "Example data" = "example", "Upload CSV" = "upload")
-        } else {
-          c("Example data" = "example", "Upload CSV" = "upload")
-        },
-        selected = if (.has_supplied_data) "provided" else "example"
-      ),
-      conditionalPanel(
-        condition = "input.data_source == 'provided'",
-        helpText("Using the data supplied through dppca_app(X, group = ...).")
-      ),
-      conditionalPanel(
-        condition = "input.data_source == 'example'",
-        selectInput(
-          "example_dataset", "Example dataset",
-          choices = c(
-            "Gaussian" = "gau",
-            "Gaussian with groups" = "gau_grouped",
-            "Adult" = "adult"
+  div(
+    class = "app-layout",
+    tags$form(
+      class = "well app-controls", role = "complementary",
+      div(
+        class = "control-column",
+        div(
+          class = "control-section",
+          h3(class = "sidebar-heading", "Data"),
+          radioButtons(
+            "data_source", NULL,
+            choices = if (.has_supplied_data) {
+              c("Provided data" = "provided", "Example data" = "example", "Upload CSV" = "upload")
+            } else {
+              c("Example data" = "example", "Upload CSV" = "upload")
+            },
+            selected = if (.has_supplied_data) "provided" else "example"
           ),
-          selected = "gau_grouped"
-        )
-      ),
-      conditionalPanel(
-        condition = "input.data_source == 'upload'",
-        fileInput("csv_file", "Upload CSV file", accept = c(".csv")),
-        checkboxInput("csv_header", "Header", value = TRUE)
-      ),
-
-      hr(),
-      h4("Common PCA / privacy options"),
-      numericInput("k", "Number of leading PCs for scree plot (k)", value = 4, min = 1, step = 1),
-      numericInput("eps_total", "Total epsilon", value = 5, min = 1e-6, step = 0.1),
-      numericInput("delta_total", "Total delta", value = 1e-3, min = 1e-12, max = 0.99, step = 1e-6),
-      checkboxInput(
-        "split_budget_between_plots",
-        "Split total privacy budget between scree and score plots",
-        value = FALSE
-      ),
-      checkboxInput("center", "Center columns", value = TRUE),
-      checkboxInput("standardize", "Standardize columns", value = FALSE),
-      checkboxInput("g_dppca", "Use private PC directions", value = FALSE),
-
-      hr(),
-      tabsetPanel(
-        id = "settings_tab",
-
-        tabPanel(
-          "Scree controls",
-          checkboxGroupInput(
-            "scree_method", "DP scree method",
-            choices = c("Clipped mean" = "clipped", "PMWM" = "pmwm", "Huber" = "huber"),
-            selected = c("clipped", "pmwm", "huber"),
-            inline = TRUE
+          conditionalPanel(
+            condition = "input.data_source == 'provided'",
+            helpText("Using the data supplied to dppca_app().")
           ),
-          selectInput(
-            "scree_type", "Plot type",
-            choices = c("PVE" = "pve", "Raw scree" = "scree"),
-            selected = "pve"
-          ),
-          checkboxInput("scree_mono", "Apply monotone post-processing", value = TRUE),
-          helpText("Select one or more DP scree methods to display together."),
-
-          tags$details(
-            class = "control-details",
-            tags$summary("Clipped control"),
-            tags$div(
-              class = "control-body",
-              numericInput("C_clip", "C_clip", value = 3, min = 1e-6, step = 0.5)
+          conditionalPanel(
+            condition = "input.data_source == 'example'",
+            selectInput(
+              "example_dataset", "Example dataset",
+              choices = c(
+                "Gaussian" = "gau",
+                "Gaussian with groups" = "gau_grouped",
+                "Vowel" = "vowel"
+              ),
+              selected = "gau_grouped"
             )
           ),
-
-          tags$details(
-            class = "control-details",
-            tags$summary("PMWM control"),
-            tags$div(
-              class = "control-body",
-              numericInput("pmwm_beta", "beta", value = 1.001, min = 1.000001, step = 0.001),
-              numericInput("pmwm_a", "a", value = 0, step = 1),
-              numericInput("pmwm_b", "b", value = 10, step = 1),
-              numericInput("pmwm_trim_const", "trim_const", value = 10, min = 0, step = 1),
-              numericInput("pmwm_eta", "eta", value = 0.01, min = 0, max = 0.49, step = 0.01),
-              checkboxInput("pmwm_split_mode", "split_mode", value = TRUE)
+          conditionalPanel(
+            condition = "input.data_source == 'upload'",
+            fileInput("csv_file", "CSV file", accept = ".csv"),
+            checkboxInput("csv_header", "First row contains column names", value = TRUE)
+          ),
+          conditionalPanel(
+            condition = "input.analysis == 'pca' || input.analysis == 'score'",
+            selectInput(
+              "group_col", "Group column",
+              choices = c("None" = ""), selected = ""
+            ),
+            checkboxInput(
+              "use_group", "Use group labels for PCA and Score", value = TRUE
             )
           ),
-
-          tags$details(
-            class = "control-details",
-            tags$summary("Huber control"),
-            tags$div(
-              class = "control-body",
-              numericInput("huber_mu0", "mu0", value = 0, step = 0.5),
-              numericInput("huber_eta0", "eta0", value = 1, min = 1e-8, step = 0.1),
-              numericInput("huber_T", "T", value = 50, min = 1, step = 1),
-              numericInput("huber_M", "M", value = 20, min = 1, step = 1),
-              numericInput("huber_k_min_m2", "k_min_m2", value = -40, step = 1),
-              numericInput("huber_k_max_m2", "k_max_m2", value = 40, step = 1),
-              numericInput("huber_m2_frac", "m2_frac", value = 0.25, min = 1e-6, max = 0.99, step = 0.05)
-            )
-          ),
-
-          actionButton("run_scree", "Run DP scree plot", class = "btn-primary")
+          checkboxInput(
+            "include_nonprivate", "Include non-private comparison", value = FALSE
+          )
         ),
 
-        tabPanel(
-          "Score controls",
-          numericInput("axis_x", "x-axis PC", value = 1, min = 1, step = 1),
-          numericInput("axis_y", "y-axis PC", value = 2, min = 1, step = 1),
-          checkboxGroupInput(
-            "score_method", "DP score method",
-            choices = c("Additive histogram" = "add", "Sparse histogram" = "sparse"),
-            selected = c("add", "sparse"),
-            inline = TRUE
-          ),
-          numericInput("bins_x", "Number of x-axis bins", value = 10, min = 1, step = 1),
-          numericInput("bins_y", "Number of y-axis bins", value = 10, min = 1, step = 1),
-          checkboxInput("use_group", "Use group labels when available", value = TRUE),
+        div(
+          class = "control-section",
+          h3(class = "sidebar-heading", "Budget allocation"),
           conditionalPanel(
-            condition = "input.data_source == 'upload' && input.use_group",
-            textInput(
-              "upload_group_col",
-              "group:",
-              value = "",
-              placeholder = "Enter group column name, e.g. group"
-            ),
-            helpText("For uploaded CSV files, enter the column name containing group labels. This column is excluded from PCA and used only for grouped score plots.")
+            condition = "input.analysis != 'loading'",
+            radioButtons(
+              "budget_mode", "Budget input",
+              choices = c(
+                "Total + proportions" = "total",
+                "Set each budget" = "direct"
+              ),
+              selected = "total"
+            )
           ),
-          helpText("Score plots use a fixed frame inflation of 0.20 and fixed color #6A5ACD for ungrouped plots."),
-          actionButton("run_score", "Run DP score plot", class = "btn-primary")
+          conditionalPanel(
+            condition = "input.analysis == 'loading' || input.budget_mode == 'total'",
+            div(
+              class = "control-pair budget-pair",
+              numericInput(
+                "eps", "Total epsilon",
+                value = 10, min = 1e-6, step = 0.1
+              ),
+              numericInput(
+                "delta", "Total delta",
+                value = 1e-8, min = 0, max = 0.99, step = 1e-6
+              )
+            )
+          ),
+          conditionalPanel(
+            condition = "input.analysis == 'loading'",
+            helpText("Loading uses the full budget to estimate all PC directions.")
+          ),
+          conditionalPanel(
+            condition = "input.analysis == 'scree' && input.budget_mode == 'total'",
+            .app_two_split_control("scree")
+          ),
+          conditionalPanel(
+            condition = "input.analysis == 'score' && input.budget_mode == 'total'",
+            .app_two_split_control("score")
+          ),
+          conditionalPanel(
+            condition = "input.analysis == 'pca' && input.budget_mode == 'total'",
+            .app_pca_split_control()
+          ),
+          conditionalPanel(
+            condition = "input.analysis != 'loading' && input.budget_mode == 'direct'",
+            div(class = "control-caption", "Loading"),
+            div(
+              class = "control-pair budget-pair",
+              numericInput(
+                "budget_loading_eps", "Epsilon",
+                value = 10 / 3, min = 0, step = 0.1
+              ),
+              numericInput(
+                "budget_loading_delta", "Delta",
+                value = 1e-6, min = 0, max = 0.99, step = 1e-6
+              )
+            ),
+            conditionalPanel(
+              condition = "input.analysis == 'pca' || input.analysis == 'scree'",
+              div(class = "control-caption", "Scree"),
+              div(
+                class = "control-pair budget-pair",
+                numericInput(
+                  "budget_scree_eps", "Epsilon",
+                  value = 10 / 3, min = 0, step = 0.1
+                ),
+                numericInput(
+                  "budget_scree_delta", "Delta",
+                  value = 1e-6, min = 0, max = 0.99, step = 1e-6
+                )
+              )
+            ),
+            conditionalPanel(
+              condition = "input.analysis == 'pca' || input.analysis == 'score'",
+              div(class = "control-caption", "Score"),
+              div(
+                class = "control-pair budget-pair",
+                numericInput(
+                  "budget_score_eps", "Epsilon",
+                  value = 10 / 3, min = 0, step = 0.1
+                ),
+                numericInput(
+                  "budget_score_delta", "Delta",
+                  value = 1e-6, min = 0, max = 0.99, step = 1e-6
+                )
+              )
+            )
+          ),
+          div(class = "table-wrap", tableOutput("budget_preview")),
+          div(class = "cpp-setting",
+            checkboxInput("cpp", "Use C++ implementation", value = TRUE)
+          )
         )
+      ),
+      div(
+        class = "control-column",
+        div(
+          class = "control-section",
+          h3(class = "sidebar-heading", "Analysis settings"),
+          conditionalPanel(
+            condition = "input.analysis == 'pca' || input.analysis == 'scree'",
+            numericInput("k", "Leading PCs", value = 4, min = 1, step = 1)
+          ),
+          conditionalPanel(
+            condition = "input.analysis != 'scree'",
+            div(
+              class = "control-pair",
+              numericInput("axis_x", "x-axis PC", value = 1, min = 1, step = 1),
+              numericInput("axis_y", "y-axis PC", value = 2, min = 1, step = 1)
+            )
+          ),
+          conditionalPanel(
+            condition = "input.analysis == 'pca'",
+            selectInput(
+              "pca_scree_method", "Scree method",
+              choices = c("Clipped" = "clipped", "PMWM" = "pmwm", "Huber" = "huber"),
+              selected = "clipped"
+            )
+          ),
+          conditionalPanel(
+            condition = "input.analysis == 'scree'",
+            checkboxGroupInput(
+              "scree_methods", "Scree methods",
+              choices = c("Clipped" = "clipped", "PMWM" = "pmwm", "Huber" = "huber"),
+              selected = "clipped"
+            )
+          ),
+          conditionalPanel(
+            condition = "input.analysis == 'pca' || input.analysis == 'scree'",
+            .app_scree_controls()
+          ),
+          conditionalPanel(
+            condition = "input.analysis == 'pca'",
+            selectInput(
+              "pca_score_method", "Score method",
+              choices = c("Sparse histogram" = "sparse", "Additive histogram" = "add"),
+              selected = "sparse"
+            )
+          ),
+          conditionalPanel(
+            condition = "input.analysis == 'score'",
+            checkboxGroupInput(
+              "score_methods", "Score methods",
+              choices = c("Sparse histogram" = "sparse", "Additive histogram" = "add"),
+              selected = "sparse"
+            )
+          ),
+          conditionalPanel(
+            condition = "input.analysis == 'pca' || input.analysis == 'score'",
+            div(
+              class = "control-pair",
+              numericInput("bins_x", "x-axis bins", value = 10, min = 1, step = 1),
+              numericInput("bins_y", "y-axis bins", value = 10, min = 1, step = 1)
+            ),
+            conditionalPanel(
+              condition = "input.analysis == 'score'",
+              checkboxGroupInput(
+                "score_display", "Score displays",
+                choices = c("Histogram" = "histogram", "Sampled points" = "sample"),
+                selected = c("histogram", "sample")
+              )
+            )
+          ),
+          conditionalPanel(
+            condition = "input.analysis == 'loading'",
+            checkboxGroupInput(
+              "loading_display", "Loading displays",
+              choices = c("Vector" = "vector", "Point" = "point", "Heatmap" = "heatmap"),
+              selected = c("vector", "point", "heatmap"), inline = TRUE
+            ),
+            numericInput("variables", "Top variables", value = 10, min = 1, step = 1),
+            conditionalPanel(
+              condition = "input.loading_display && input.loading_display.indexOf('heatmap') >= 0",
+              selectizeInput(
+                "heatmap_components", "Heatmap PCs",
+                choices = NULL, multiple = TRUE
+              ),
+              NULL
+            )
+          )
+        ),
+        div(class = "run-area", actionButton("run", "Run PCA", class = "btn-primary"))
       )
     ),
 
-    mainPanel(
-      width = 8,
-      div(
-        class = "main-plot-area",
-        div(
-          class = "plot-card plot-card-scree",
-          h4("DP Scree Plot"),
-          div(class = "plot-card-note", "PVE curves are shown in a taller, centered panel to avoid a flattened appearance."),
-          plotOutput("scree_plot", height = "520px")
+    tags$main(
+      class = "app-results",
+      tabsetPanel(
+        id = "analysis", type = "pills", selected = "pca",
+        tabPanel(
+          "PCA", value = "pca",
+          div(
+            class = "result-card",
+            h2(class = "card-heading", "A complete PCA analysis"),
+            div(
+              class = "plot-toolbar",
+              selectInput("pca_view", "View", choices = c("Plot" = "plot", "Summary" = "summary", "Data" = "data"), selected = "plot"),
+              conditionalPanel(condition = "input.pca_view == 'plot'",
+                selectInput("pca_plot_kind", "Show", choices = c(
+                  "Overview" = "all", "Scree" = "scree", "Score" = "score",
+                  "Loading" = "loading", "Variable" = "variable",
+                  "Biplot" = "biplot"), selected = "all")
+              ),
+              uiOutput("pca_reference_controls"),
+              conditionalPanel(
+                condition = "input.pca_view == 'plot'",
+                tags$details(
+                  class = "app-details toolbar-plot-settings",
+                  tags$summary("Plot settings"),
+                  div(
+                    class = "details-body plot-settings-grid",
+                    numericInput("pca_variables", "Top variables", value = 10, min = 1, step = 1),
+                    selectInput("pca_loading_display", "Loading display", choices = c("Vector" = "vector", "Point" = "point", "Heatmap" = "heatmap"), selected = "vector"),
+                    selectInput("pca_score_display", "Score display", choices = c("Histogram" = "histogram", "Sampled points" = "sample"), selected = "histogram"),
+                    checkboxInput("pca_center", "Center DP score and biplot displays", value = TRUE),
+                    div(class = "settings-subheading", "Biplot"),
+                    conditionalPanel(
+                      condition = "input.pca_plot_kind == 'all' || input.pca_plot_kind == 'biplot'",
+                      sliderInput("alpha", "Biplot alpha", min = 0, max = 1,
+                                  value = 0, step = 0.01, ticks = FALSE, width = "100%")
+                    ),
+                    checkboxInput("pca_labels", "Show variable labels", value = TRUE),
+                    div(class = "settings-subheading", "Synthetic sampling"),
+                    div(class = "sampling-controls",
+                      div(class = "sampling-method",
+                        radioButtons("pca_sampling_method", "Sampling method",
+                          choices = c("Uniform" = "uniform", "Center" = "center"),
+                          selected = "uniform", inline = TRUE)
+                      ),
+                      div(class = "sampling-option-row",
+                        checkboxInput("pca_custom_sample", "Custom sample size", value = FALSE),
+                        conditionalPanel(
+                          condition = "input.pca_custom_sample",
+                          numericInput("pca_sampling_size", "Sample points (total)",
+                            value = 1000, min = 1, step = 100)
+                        )
+                      ),
+                      div(class = "sampling-option-row",
+                        checkboxInput("pca_custom_bandwidth", "Custom bandwidth scale", value = FALSE),
+                        conditionalPanel(
+                          condition = "input.pca_custom_bandwidth",
+                          numericInput("pca_bandwidth_scale", "Gaussian jitter scale",
+                            value = 0.25, min = 0, step = 0.05)
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            ),
+            conditionalPanel(
+              condition = "input.pca_view == 'plot'",
+              div(class = "plot-area pca-plot-area", plotOutput("pca_plot", height = "auto"))
+            ),
+            conditionalPanel(
+              condition = "input.pca_view == 'summary'",
+              h3(class = "summary-heading", "Component importance"),
+              div(class = "table-wrap", tableOutput("importance")),
+              h3(class = "summary-heading", "Privacy allocation"),
+              div(class = "table-wrap", tableOutput("pca_budget"))
+            ),
+            conditionalPanel(condition = "input.pca_view == 'data'",
+              div(class = "data-view", uiOutput("pca_data"))
+            )
+          )
         ),
-        div(
-          class = "plot-card plot-card-score",
-          h4("DP Score Plot"),
-          plotOutput("score_plot", height = "520px")
+        tabPanel(
+          "Loading", value = "loading",
+          div(
+            class = "result-card",
+            h2(class = "card-heading", "Loading plot"),
+            div(class = "plot-toolbar solo-toolbar",
+              selectInput("loading_view", "View", choices = c(
+                "Plot" = "plot", "Summary" = "summary", "Data" = "data"
+              ), selected = "plot"),
+              conditionalPanel(condition = "input.loading_view == 'plot'",
+                selectInput("loading_show", "Show", choices = c(
+                  "Overview" = "all", "Vector" = "vector",
+                  "Point" = "point", "Heatmap" = "heatmap"
+                ), selected = "all")
+              ),
+              uiOutput("loading_reference_controls")
+            ),
+            conditionalPanel(
+              condition = "input.loading_view == 'plot'",
+              div(class = "plot-area", uiOutput("loading_canvas"))
+            ),
+            conditionalPanel(
+              condition = "input.loading_view == 'summary'",
+              div(class = "summary-view", verbatimTextOutput("loading_summary"))
+            ),
+            conditionalPanel(condition = "input.loading_view == 'data'",
+              div(class = "data-view", uiOutput("loading_data"))
+            )
+          )
+        ),
+        tabPanel(
+          "Scree", value = "scree",
+          div(
+            class = "result-card",
+            h2(class = "card-heading", "Scree plot"),
+            div(class = "plot-toolbar solo-toolbar",
+              selectInput("scree_view", "View", choices = c(
+                "Plot" = "plot", "Summary" = "summary", "Data" = "data"
+              ), selected = "plot"),
+              conditionalPanel(condition = "input.scree_view == 'plot'",
+                selectInput("scree_show", "Show", choices = c(
+                  "Overview" = "all", "PVE" = "pve",
+                  "Eigenvalues" = "scree"
+                ), selected = "all")
+              ),
+              uiOutput("scree_reference_controls")
+            ),
+            conditionalPanel(
+              condition = "input.scree_view == 'plot'",
+              div(class = "plot-area scree-plot-area", uiOutput("scree_canvas"))
+            ),
+            conditionalPanel(
+              condition = "input.scree_view == 'summary'",
+              div(class = "summary-view", verbatimTextOutput("scree_summary"))
+            ),
+            conditionalPanel(condition = "input.scree_view == 'data'",
+              div(class = "data-view", uiOutput("scree_data"))
+            )
+          )
+        ),
+        tabPanel(
+          "Score", value = "score",
+          div(
+            class = "result-card",
+            h2(class = "card-heading", "Score plot"),
+            div(class = "plot-toolbar solo-toolbar",
+              selectInput("score_view", "View", choices = c(
+                "Plot" = "plot", "Summary" = "summary", "Data" = "data"
+              ), selected = "plot"),
+              conditionalPanel(condition = "input.score_view == 'plot'",
+                selectInput("score_show", "Show", choices = c(
+                  "Overview" = "all", "Histogram" = "histogram",
+                  "Sampled points" = "sample"
+                ), selected = "all")
+              ),
+              uiOutput("score_reference_controls"),
+              conditionalPanel(
+                condition = "input.score_view == 'plot'",
+                tags$details(
+                  class = "app-details toolbar-plot-settings",
+                  tags$summary("Plot settings"),
+                  div(class = "details-body plot-settings-grid",
+                    checkboxInput("score_center", "Center DP score display", value = TRUE),
+                    div(class = "settings-subheading", "Synthetic sampling"),
+                    div(class = "sampling-controls",
+                      div(class = "sampling-method",
+                        radioButtons("score_sampling_method", "Sampling method",
+                          choices = c("Uniform" = "uniform", "Center" = "center"),
+                          selected = "uniform", inline = TRUE)
+                      ),
+                      div(class = "sampling-option-row",
+                        checkboxInput("score_custom_sample", "Custom sample size", value = FALSE),
+                        conditionalPanel(
+                          condition = "input.score_custom_sample",
+                          numericInput("score_sampling_size", "Sample points (total)",
+                            value = 1000, min = 1, step = 100)
+                        )
+                      ),
+                      div(class = "sampling-option-row",
+                        checkboxInput("score_custom_bandwidth", "Custom bandwidth scale",
+                          value = FALSE),
+                        conditionalPanel(
+                          condition = "input.score_custom_bandwidth",
+                          numericInput("score_bandwidth_scale", "Gaussian jitter scale",
+                            value = 0.25, min = 0, step = 0.05)
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            ),
+            conditionalPanel(
+              condition = "input.score_view == 'plot'",
+              div(class = "plot-area", uiOutput("score_canvas"))
+            ),
+            conditionalPanel(
+              condition = "input.score_view == 'summary'",
+              div(class = "summary-view", verbatimTextOutput("score_summary"))
+            ),
+            conditionalPanel(condition = "input.score_view == 'data'",
+              div(class = "data-view", uiOutput("score_data"))
+            )
+          )
         )
       )
     )
   )
 )
 
-# ------------------------------------------------------------
-# Server
-# ------------------------------------------------------------
+# Server --------------------------------------------------------------------
 
 server <- function(input, output, session) {
+  results <- reactiveValues(pca = NULL, loading = NULL, scree = NULL, score = NULL)
+  errors <- reactiveValues(pca = NULL, loading = NULL, scree = NULL, score = NULL)
+  delta_sample_size <- reactiveVal(NULL)
+  preview_variables <- reactiveVal(NULL)
+  direct_budgets <- reactiveValues(pca = NULL, scree = NULL, score = NULL)
+  active_direct_mode <- reactiveVal(NULL)
 
-  selected_data <- reactive({
-    if (input$data_source == "provided") {
+  # Clear old fits immediately, even when the new data are not yet valid.
+  observeEvent(list(
+    input$data_source, input$example_dataset, input$csv_file,
+    input$csv_header, input$group_col
+  ), {
+    for (mode in c("pca", "loading", "scree", "score")) {
+      results[[mode]] <- NULL
+      errors[[mode]] <- NULL
+    }
+  }, priority = 100)
+
+  raw_data <- reactive(.app_checked_data({
+    if (identical(input$data_source, "provided")) {
       req(.supplied_X)
-
-      # For supplied data, keep the original data for dp_score_plot_group()
-      # when `group` is a column name such as "group".  Also prepare a numeric-only
-      # feature matrix for scree/non-group score calculations.
-      split <- .split_grouped_data(.supplied_X, .supplied_group)
-
-      group_arg <- NULL
-      if (!is.null(.supplied_group)) {
-        group_arg <- .supplied_group
-      } else {
-        inferred <- .infer_group_column(.supplied_X)
-        if (!is.null(inferred)) group_arg <- inferred
-      }
-
-      list(
-        X_feature = split$X,
-        X_score = .supplied_X,
-        group_arg = group_arg,
-        label = "Provided data"
-      )
-
-    } else if (input$data_source == "example") {
-      ex <- .load_example_dataset(input$example_dataset)
-
-      # For the grouped example dataset, gau_g already contains the group
-      # column named "group". Pass the full data frame and group = "group"
-      # to dp_score_plot_group(), matching the console usage:
-      # dp_score_plot_group(X = gau_g, group = "group", ...).
-      if (input$example_dataset == "gau_grouped") {
-        X_raw <- .load_dppca_data("gau_g")
-        return(list(
-          X_feature = .split_grouped_data(X_raw, "group")$X,
-          X_score = X_raw,
-          group_arg = "group",
-          label = "Gaussian with groups"
-        ))
-      }
-
-      list(
-        X_feature = ex$X,
-        X_score = ex$X,
-        group_arg = NULL,
-        label = ex$label
-      )
-
-    } else {
+      return(.app_data(.supplied_X, "Provided data", .supplied_group))
+    }
+    if (identical(input$data_source, "upload")) {
       req(input$csv_file)
-      dat <- utils::read.csv(input$csv_file$datapath, header = input$csv_header, check.names = FALSE)
+      data <- utils::read.csv(
+        input$csv_file$datapath,
+        header = isTRUE(input$csv_header),
+        check.names = FALSE
+      )
+      return(.app_data(data, input$csv_file$name))
+    }
 
-      # For uploaded CSV files, do not force automatic grouping.
-      # If the user checks "Use group labels when available" and types a
-      # group column name, pass the full uploaded data to dp_score_plot_group()
-      # with group = <that column name>.  The feature matrix used for scree and
-      # non-group score plots excludes that group column.
-      group_col <- input$upload_group_col
-      if (is.null(group_col)) group_col <- ""
-      group_col <- trimws(group_col)
+    req(input$example_dataset)
+    if (input$example_dataset == "gau_grouped") {
+      data <- .app_load_data("gau_g")
+      if (!(is.data.frame(data) || is.matrix(data))) {
+        return(.app_data(.app_load_data("gau"), "Gaussian with groups", data))
+      }
+      return(.app_data(data, "Gaussian with groups"))
+    }
+    label <- switch(
+      input$example_dataset,
+      gau = "Gaussian",
+      vowel = "Vowel"
+    )
+    .app_data(.app_load_data(input$example_dataset), label)
+  }))
 
-      if (isTRUE(input$use_group) && nzchar(group_col)) {
-        validate(
-          need(group_col %in% names(dat),
-               paste0("The uploaded CSV does not contain a column named '", group_col, "'."))
-        )
+  observeEvent(raw_data(), {
+    data <- raw_data()
+    choices <- c("None" = "", stats::setNames(names(data$data), names(data$data)))
+    if (!is.null(data$external_group)) {
+      choices <- c(choices, "Provided group labels" = ".provided_group")
+    }
+    updateSelectInput(
+      session, "group_col", choices = choices, selected = data$group_column
+    )
+  })
 
-        split <- .split_grouped_data(dat, group_col)
-        list(
-          X_feature = split$X,
-          X_score = dat,
-          group_arg = group_col,
-          label = "Uploaded CSV"
-        )
-      } else {
-        list(
-          X_feature = dat,
-          X_score = dat,
-          group_arg = NULL,
-          label = "Uploaded CSV"
-        )
+  prepared_data <- reactive(.app_checked_data({
+    data <- raw_data()
+    group <- NULL
+    group_arg <- NULL
+    selected <- input$group_col
+    if (is.null(selected)) selected <- ""
+    features <- data$data
+
+    if (identical(selected, ".provided_group")) {
+      group <- data$external_group
+      group_arg <- group
+    } else if (nzchar(selected)) {
+      validate(need(selected %in% names(features), "Choose a group column."))
+      group <- features[[selected]]
+      group_arg <- selected
+      if (isTRUE(input$use_group) && input$analysis %in% c("pca", "score")) {
+        features <- features[, names(features) != selected, drop = FALSE]
       }
     }
-  })
-
-  X_data <- reactive({
-    .to_numeric_matrix(selected_data()$X_feature)
-  })
-
-  plot_budget <- reactive({
-    validate(
-      need(input$eps_total > 0, "epsilon must be positive."),
-      need(input$delta_total > 0 && input$delta_total < 1, "delta must be in (0, 1).")
-    )
-
-    if (isTRUE(input$split_budget_between_plots)) {
-      list(
-        scree_eps = input$eps_total / 2,
-        scree_delta = input$delta_total / 2,
-        score_eps = input$eps_total / 2,
-        score_delta = input$delta_total / 2
-      )
-    } else {
-      list(
-        scree_eps = input$eps_total,
-        scree_delta = input$delta_total,
-        score_eps = input$eps_total,
-        score_delta = input$delta_total
-      )
-    }
-  })
-
-  observeEvent(X_data(), {
-    X <- X_data()
-    n <- nrow(X)
-    max_pc <- max(2L, min(n - 1L, ncol(X)))
-    updateNumericInput(session, "k", max = max_pc, value = min(input$k, max_pc))
-    updateNumericInput(session, "axis_x", max = max_pc, value = min(input$axis_x, max_pc))
-    updateNumericInput(session, "axis_y", max = max_pc, value = min(max(input$axis_y, 2L), max_pc))
-    updateNumericInput(session, "delta_total", value = .default_delta(n))
-  })
-
-  scree_event <- eventReactive(input$run_scree, {
-    X <- X_data()
-    max_pc <- min(nrow(X) - 1L, ncol(X))
-    validate(
-      need(input$k >= 1 && input$k <= max_pc, paste0("k must be between 1 and ", max_pc, ".")),
-      need(length(.selected_scree_methods(input)) >= 1L, "Choose at least one DP scree method."),
-      need(input$eps_total > 0, "epsilon must be positive."),
-      need(input$delta_total > 0 && input$delta_total < 1, "delta must be in (0, 1)."),
-      need(input$pmwm_a < input$pmwm_b, "For PMWM, a must be smaller than b."),
-      need(input$huber_k_min_m2 < input$huber_k_max_m2, "For Huber, k_min_m2 must be smaller than k_max_m2.")
-    )
 
     list(
-      X = X,
-      control = .make_scree_control(input),
-      budget = plot_budget()
+      X = data$data,
+      numeric_X = .app_matrix(features),
+      group = group,
+      group_arg = group_arg,
+      label = data$label
     )
-  })
+  }))
 
-  output$scree_plot <- renderPlot({
-    obj <- scree_event()
-    tryCatch(
-      {
-        withProgress(message = "Computing DP scree plot...", value = 0, {
-          incProgress(0.15, detail = "Preparing private scree settings")
-          .plot_scree_methods(
-            X = obj$X,
-            k = input$k,
-            method = .selected_scree_methods(input),
-            eps_total = obj$budget$scree_eps,
-            delta_total = obj$budget$scree_delta,
-            center = input$center,
-            standardize = input$standardize,
-            control = obj$control,
-            g_dppca = input$g_dppca,
-            cpp.option = FALSE,
-            mono = input$scree_mono,
-            type = input$scree_type
-          )
-          incProgress(0.85, detail = "Rendering scree plot")
-        })
-      },
-      error = function(e) {
-        showNotification(paste("Scree plot error:", conditionMessage(e)), type = "error", duration = 10)
-        plot.new()
-        text(0.5, 0.5, paste("Scree plot error:\n", conditionMessage(e)), cex = 0.9)
-      }
-    )
-  })
-
-  score_event <- eventReactive(input$run_score, {
-    X <- X_data()
-    max_pc <- min(nrow(X) - 1L, ncol(X))
-    axes <- c(as.integer(input$axis_x), as.integer(input$axis_y))
-    validate(
-      need(length(unique(axes)) == 2L, "Choose two different PCs for the score plot axes."),
-      need(all(axes >= 1 & axes <= max_pc), paste0("Axes must be between 1 and ", max_pc, ".")),
-      need(length(input$score_method) >= 1L, "Choose at least one DP score method."),
-      need(input$eps_total > 0, "epsilon must be positive."),
-      need(input$delta_total > 0 && input$delta_total < 1, "delta must be in (0, 1).")
-    )
-
-    bins <- c(as.integer(input$bins_x), as.integer(input$bins_y))
-    validate(
-      need(all(is.finite(bins)) && all(bins >= 1) && all(bins == as.integer(bins)), "Both bin counts must be positive integers.")
-    )
-
-    dat <- selected_data()
-    group_arg <- dat$group_arg
-    budget <- plot_budget()
-
-    tryCatch(
-      {
-        withProgress(message = "Computing DP score plot...", value = 0, {
-          incProgress(0.10, detail = "Preparing score plot settings")
-
-          if (isTRUE(input$use_group) && !is.null(group_arg)) {
-            incProgress(0.20, detail = "Computing grouped private score histograms")
-            res <- dp_score_plot_group(
-              X = dat$X_score,
-              group = group_arg,
-              center = input$center,
-              standardize = input$standardize,
-              g_dppca = input$g_dppca,
-              cpp.option = FALSE,
-              axes = axes,
-              eps = budget$score_eps,
-              delta = budget$score_delta,
-              bins = bins,
-              method = input$score_method
-            )
-          } else {
-            incProgress(0.20, detail = "Computing private score histograms")
-            res <- dp_score_plot(
-              X = X,
-              center = input$center,
-              standardize = input$standardize,
-              g_dppca = input$g_dppca,
-              cpp.option = FALSE,
-              axes = axes,
-              eps = budget$score_eps,
-              delta = budget$score_delta,
-              bins = bins,
-              method = input$score_method
-            )
-          }
-
-          incProgress(0.70, detail = "Rendering score plot")
-          res
-        })
-      },
-      error = function(e) {
-        showNotification(paste("Score plot error:", conditionMessage(e)), type = "error", duration = 10)
-        structure(list(error = conditionMessage(e)), class = "dppca_app_error")
-      }
-    )
-  })
-
-  output$score_plot <- renderPlot({
-    res <- score_event()
-
-    if (inherits(res, "dppca_app_error")) {
-      plot.new()
-      text(0.5, 0.5, paste("Score plot error:\n", res$error), cex = 0.9)
-    } else if (!is.null(res$plot$all)) {
-      print(res$plot$all)
-    } else if (!is.null(res$plot)) {
-      print(res$plot)
-    } else {
-      print(res)
+  observeEvent(prepared_data(), {
+    data <- prepared_data()
+    p <- ncol(data$numeric_X)
+    n <- nrow(data$numeric_X)
+    if (!identical(colnames(data$numeric_X), preview_variables())) {
+      updateNumericInput(session, "k", max = p, value = min(4L, p))
+      updateNumericInput(session, "axis_x", max = p, value = 1)
+      updateNumericInput(session, "axis_y", max = p, value = 2)
+      updateNumericInput(session, "variables", max = p, value = min(10L, p))
+      updateNumericInput(session, "pca_variables", max = p, value = min(10L, p))
+      updateSelectizeInput(
+        session, "heatmap_components",
+        choices = stats::setNames(seq_len(p), paste0("PC", seq_len(p))),
+        selected = c(1, 2)
+      )
+      preview_variables(colnames(data$numeric_X))
+    }
+    if (!identical(n, delta_sample_size())) {
+      updateNumericInput(session, "pca_sampling_size", value = as.integer(n))
+      updateNumericInput(session, "score_sampling_size", value = as.integer(n))
+      updateNumericInput(
+        session, "delta",
+        value = 10^(-ceiling(log10(as.numeric(n)^2)))
+      )
+      delta_sample_size(n)
     }
   })
+
+  show_direct_budget <- function(budgets) {
+    for (component in names(budgets)) {
+      budget <- budgets[[component]]
+      updateNumericInput(
+        session, paste0("budget_", component, "_eps"), value = budget[["eps"]]
+      )
+      updateNumericInput(
+        session, paste0("budget_", component, "_delta"), value = budget[["delta"]]
+      )
+    }
+    invisible(NULL)
+  }
+
+  initialize_direct_budget <- function(mode) {
+    if (is.null(mode) || mode == "loading") return(FALSE)
+    tryCatch({
+      privacy <- .app_privacy(input, mode, budget_mode = "total")
+      direct_budgets[[mode]] <- privacy$budgets
+      show_direct_budget(privacy$budgets)
+      TRUE
+    }, error = function(e) {
+      showNotification(conditionMessage(e), type = "error", duration = 10)
+      FALSE
+    })
+  }
+
+  # Each analysis keeps its own direct entries. First visits start from that
+  # analysis's total allocation, so hidden placeholder fields are never reused.
+  observeEvent(list(input$budget_mode, input$analysis), {
+    previous <- active_direct_mode()
+    if (!is.null(previous)) {
+      components <- switch(
+        previous,
+        pca = c("loading", "scree", "score"),
+        scree = c("loading", "scree"),
+        score = c("loading", "score")
+      )
+      saved <- lapply(components, function(component) {
+        values <- lapply(c("eps", "delta"), function(parameter) {
+          value <- input[[paste0("budget_", component, "_", parameter)]]
+          if (is.null(value) || !length(value)) NA_real_ else value
+        })
+        stats::setNames(unlist(values), c("eps", "delta"))
+      })
+      names(saved) <- components
+      direct_budgets[[previous]] <- saved
+    }
+
+    active_direct_mode(NULL)
+    mode <- input$analysis
+    if (
+      identical(input$budget_mode, "direct") &&
+        !is.null(mode) && mode != "loading"
+    ) {
+      if (is.null(direct_budgets[[mode]])) {
+        if (!initialize_direct_budget(mode)) {
+          components <- switch(
+            mode,
+            pca = c("loading", "scree", "score"),
+            scree = c("loading", "scree"),
+            score = c("loading", "score")
+          )
+          empty <- stats::setNames(
+            lapply(components, function(component) c(eps = NA_real_, delta = NA_real_)),
+            components
+          )
+          direct_budgets[[mode]] <- empty
+          show_direct_budget(empty)
+        }
+      } else {
+        show_direct_budget(direct_budgets[[mode]])
+      }
+      active_direct_mode(mode)
+    }
+  })
+
+  observeEvent(input$analysis, {
+    label <- switch(
+      input$analysis,
+      pca = "Run PCA",
+      loading = "Run Loading",
+      scree = "Run Scree",
+      score = "Run Score"
+    )
+    updateActionButton(session, "run", label = label)
+  })
+
+  output$budget_preview <- renderTable({
+    req(input$analysis)
+    if (input$analysis == "loading") {
+      validate(
+        need(is.finite(input$eps) && input$eps > 0, "eps must be positive."),
+        need(
+          is.finite(input$delta) && input$delta > 0 && input$delta < 1,
+          "delta must be between 0 and 1."
+        )
+      )
+      return(.app_budget_table(rbind(Loading = c(eps = input$eps, delta = input$delta))))
+    }
+    privacy <- tryCatch(.app_privacy(input, input$analysis), error = identity)
+    validate(need(!inherits(privacy, "error"),
+                  if (inherits(privacy, "error")) conditionMessage(privacy) else ""))
+    methods <- switch(
+      input$analysis,
+      scree = length(input$scree_methods),
+      score = length(input$score_methods),
+      1L
+    )
+    .app_budget(privacy, input$analysis, methods)
+  }, striped = TRUE, spacing = "xs", align = "lrr")
+
+  # Estimation is only triggered by this button. Renderers use saved results.
+  observeEvent(input$run, {
+    mode <- input$analysis
+    errors[[mode]] <- NULL
+    warning_messages <- character()
+
+    computed <- tryCatch(withCallingHandlers({
+      if (identical(input$data_source, "upload") && is.null(input$csv_file)) {
+        stop("Upload a CSV file before running the analysis.", call. = FALSE)
+      }
+      data <- prepared_data()
+      X <- data$X
+      p <- ncol(data$numeric_X)
+      group_arg <- if (isTRUE(input$use_group)) data$group_arg else NULL
+      privacy <- if (mode == "loading") NULL else .app_privacy(input, mode)
+      axes <- NULL
+      bins <- NULL
+      k <- NULL
+      plot_args <- list()
+
+      if (mode != "scree") {
+        axes <- c(
+          .app_integer(input$axis_x, "Horizontal PC", upper = p),
+          .app_integer(input$axis_y, "Vertical PC", upper = p)
+        )
+        if (axes[1] == axes[2]) stop("Choose two different PC axes.", call. = FALSE)
+      }
+      if (mode %in% c("pca", "scree")) {
+        k <- .app_integer(input$k, "Number of scree components", upper = p)
+        if (mode == "pca" && (k < 2L || max(axes) > k)) {
+          stop("For PCA, k must include both selected axes and be at least 2.",
+               call. = FALSE)
+        }
+      }
+      if (mode %in% c("pca", "score")) {
+        bins <- c(
+          .app_integer(input$bins_x, "Horizontal bins"),
+          .app_integer(input$bins_y, "Vertical bins")
+        )
+      }
+      if (mode == "loading" && !length(input$loading_display)) {
+        stop("Choose at least one loading display.", call. = FALSE)
+      }
+      if (mode == "score" && !length(input$score_display)) {
+        stop("Choose at least one score display.", call. = FALSE)
+      }
+
+      value <- withProgress(message = paste("Computing", toupper(mode)), value = 0, {
+        incProgress(0.1, detail = "Estimating private quantities")
+        if (mode == "pca") {
+          value <- dp_pca(
+            X = X,
+            privacy = privacy,
+            scree = list(
+              k = k,
+              method = input$pca_scree_method,
+              control = .app_controls(input, input$pca_scree_method),
+              mono = isTRUE(input$mono)
+            ),
+            score = list(method = input$pca_score_method, bins = bins),
+            axes = axes,
+            cpp.option = isTRUE(input$cpp),
+            non_private = isTRUE(input$include_nonprivate),
+            group = group_arg
+          )
+        } else if (mode == "loading") {
+          components <- as.integer(input$heatmap_components)
+          if (!length(components)) components <- axes
+          plot_args <- list(
+            axes = axes,
+            type = c("vector", "point", "heatmap"),
+            heatmap_components = components,
+            variables = .app_integer(input$variables, "Variables", upper = p)
+          )
+          value <- dp_loading(
+            X = X,
+            privacy = privacy_control(
+              loading = c(eps = input$eps, delta = input$delta)
+            ),
+            cpp.option = isTRUE(input$cpp),
+            non_private = isTRUE(input$include_nonprivate)
+          )
+        } else if (mode == "scree") {
+          methods <- unique(input$scree_methods)
+          value <- dp_scree(
+            X = X,
+            k = k,
+            privacy = privacy,
+            method = methods,
+            control = .app_controls(input, methods),
+            cpp.option = isTRUE(input$cpp),
+            mono = isTRUE(input$mono),
+            non_private = isTRUE(input$include_nonprivate)
+          )
+        } else {
+          methods <- unique(input$score_methods)
+          if (!length(methods)) stop("Choose at least one score method.", call. = FALSE)
+          plot_args <- list(
+            type = c("histogram", "sample"),
+            plot_control = score_plot_control(show_group_legend = TRUE)
+          )
+          args <- list(
+            X = X,
+            privacy = privacy,
+            bins = bins,
+            method = methods,
+            cpp.option = isTRUE(input$cpp),
+            axes = axes,
+            non_private = isTRUE(input$include_nonprivate),
+            group = group_arg
+          )
+          value <- do.call(dp_score, args)
+        }
+        incProgress(0.9, detail = "Saving results for display")
+        value
+      })
+
+      list(
+        value = value,
+        plot_args = plot_args,
+        seed = sample.int(.Machine$integer.max, 1L),
+        label = data$label,
+        n = nrow(X),
+        p = p,
+        columns = colnames(data$numeric_X),
+        group_name = if (mode %in% c("pca", "score") &&
+          is.character(group_arg) && length(group_arg) == 1L) {
+          group_arg
+        } else if (mode %in% c("pca", "score") && !is.null(group_arg)) {
+          "Provided group labels"
+        } else NULL,
+        warnings = warning_messages,
+        privacy = privacy
+      )
+    }, warning = function(w) {
+      warning_messages <<- unique(c(warning_messages, conditionMessage(w)))
+      invokeRestart("muffleWarning")
+    }), error = function(e) {
+      errors[[mode]] <- conditionMessage(e)
+      showNotification(conditionMessage(e), type = "error", duration = 10)
+      NULL
+    })
+
+    results[[mode]] <- computed
+  }, ignoreInit = TRUE)
+
+  for (mode in c("pca", "loading", "scree", "score")) {
+    local({
+      current_mode <- mode
+      output[[paste0(current_mode, "_status")]] <- renderUI({
+        error <- errors[[current_mode]]
+        if (!is.null(error)) {
+          return(tags$p(class = "result-error", error))
+        }
+        .app_result_note(results[[current_mode]])
+      })
+    })
+  }
+
+  # The Data view holds the previously always-visible file/warning banner.
+  # It deliberately does not render raw individual observations by default.
+  for (mode in c("pca", "loading", "scree", "score")) {
+    local({
+      tab <- mode
+      output[[paste0(tab, "_data")]] <- renderUI({
+        result <- results[[tab]]
+        error <- errors[[tab]]
+        if (is.null(result)) {
+          return(tags$p(class = "result-note",
+            if (!is.null(error)) error else paste("Run", tab, "to inspect the data information.")))
+        }
+        group_name <- result$group_name
+        if (is.null(group_name) || !length(group_name) || !nzchar(group_name)) {
+          group_name <- "Not used"
+        }
+        div(
+          div(class = "result-status", .app_result_note(result)),
+          div(class = "data-grid",
+            div(class = "data-line", tags$strong("Dataset"), result$label),
+            div(class = "data-line", tags$strong("Observations"), format(result$n, big.mark = ",")),
+            div(class = "data-line", tags$strong("Numeric PCA variables"), as.character(result$p)),
+            div(class = "data-line", tags$strong("Grouping variable"), group_name)
+          ),
+          h3("Variables used for PCA"),
+          div(class = "data-columns", paste(result$columns, collapse = ", "))
+        )
+      })
+    })
+  }
+
+  # Only show DP / Non-private / Compare on the Plot view.
+  # Hide the entire Results control on Summary and Data views.
+  output$pca_reference_controls <- renderUI({
+    result <- results$pca
+    if (is.null(result)) return(NULL)
+    if (!identical(input$pca_view, "plot")) return(NULL)
+    if (is.null(result$value$nonprivate)) return(NULL)
+    div(class = "reference-choice",
+      radioButtons("pca_version", "Results",
+        choices = c("DP" = "private", "Non-private" = "nonprivate",
+                    "Compare" = "compare"),
+        selected = "private", inline = TRUE))
+  })
+
+  for (mode in c("loading", "scree", "score")) {
+    local({
+      tab <- mode
+      output[[paste0(tab, "_reference_controls")]] <- renderUI({
+        result <- results[[tab]]
+        if (is.null(result)) return(NULL)
+        view <- input[[paste0(tab, "_view")]]
+        if (!identical(view, "plot")) return(NULL)
+        if (is.null(result$value$nonprivate)) return(NULL)
+        div(class = "reference-choice",
+          radioButtons(paste0(tab, "_version"), "Results",
+            choices = c("DP" = "private", "Non-private" = "nonprivate",
+                        "Compare" = "compare"),
+            selected = "private", inline = TRUE))
+      })
+    })
+  }
+
+
+  loading_displayed <- reactive({
+    .app_display_options(input$loading_show %||% "all",
+      input$loading_display, c("vector", "point", "heatmap"))
+  })
+  score_displayed <- reactive({
+    .app_display_options(input$score_show %||% "all",
+      input$score_display, c("histogram", "sample"))
+  })
+
+  # Canvas width follows the exact number of figures selected on the left.
+  output$loading_canvas <- renderUI({
+    result <- results$loading
+    count <- length(loading_displayed())
+    has_reference <- !is.null(result) && !is.null(result$value$nonprivate)
+    version <- .app_version(input$loading_version, has_reference)
+    n_versions <- if (version == "compare") 2L else 1L
+    layout <- .app_loading_layout(max(1L, count), n_versions)
+    div(class = paste("compact-plot", paste0("plot-cols-", layout$columns)),
+      plotOutput("loading_plot", height = "auto"))
+  })
+  output$score_canvas <- renderUI({
+    result <- results$score
+    count <- length(score_displayed())
+    has_ref <- !is.null(result) && !is.null(result$value$nonprivate)
+    ver <- .app_version(input$score_version, has_ref)
+    n_keys <- if (is.null(result)) 1L else {
+      length(switch(ver,
+        private = intersect(c("add", "sparse"), result$value$metadata$methods),
+        nonprivate = "reference",
+        compare = c("reference", intersect(c("add", "sparse"), result$value$metadata$methods))
+      ))
+    }
+    layout <- .app_score_layout(n_keys, max(1L, count), ver)
+    div(class = paste("compact-plot", paste0("plot-cols-", layout$columns)),
+      plotOutput("score_plot", height = "auto"))
+  })
+
+  output$scree_canvas <- renderUI({
+    fit <- results$scree
+    has_reference <- !is.null(fit) && !is.null(fit$value$nonprivate)
+    ver <- .app_version(input$scree_version, has_reference)
+    layout <- .app_scree_layout(input$scree_show %||% "all", ver)
+    div(class = paste("compact-plot", paste0("plot-cols-", layout$columns)),
+      plotOutput("scree_plot", height = "auto"))
+  })
+
+  for (mode in c("loading", "scree", "score")) {
+    local({
+      tab <- mode
+      output[[paste0(tab, "_summary")]] <- renderText({
+        result <- results[[tab]]
+        validate(need(!is.null(result), paste("Run", tab, "to see its summary.")))
+        .app_summary_text(result$value, version = "private", mode = tab)
+      })
+    })
+  }
+
+  # Both plot methods use the same sampling_control() semantics. In default
+  # mode, sample_size stays NULL (rather than explicitly passing n), retaining
+  # the observed non-private PCA score scatter. Sampling is post-processing.
+  pca_sampling <- reactive(.app_checked_data({
+    .app_sampling_settings(
+      method = input$pca_sampling_method,
+      custom_size = isTRUE(input$pca_custom_sample),
+      size = input$pca_sampling_size,
+      custom_bandwidth = isTRUE(input$pca_custom_bandwidth),
+      bandwidth = input$pca_bandwidth_scale
+    )
+  }))
+  score_sampling <- reactive(.app_checked_data({
+    .app_sampling_settings(
+      method = input$score_sampling_method,
+      custom_size = isTRUE(input$score_custom_sample),
+      size = input$score_sampling_size,
+      custom_bandwidth = isTRUE(input$score_custom_bandwidth),
+      bandwidth = input$score_bandwidth_scale
+    )
+  }))
+
+  # These reactives depend only on saved runs, not the current form inputs.
+  # View changes select panels from the same S3 plots and synthetic samples.
+  loading_plots <- reactive({
+    result <- results$loading
+    req(result)
+    .app_stored_plots(result)
+  })
+
+  score_plots <- reactive({
+    result <- results$score
+    req(result)
+    .app_stored_plots(
+      result,
+      center = isTRUE(input$score_center),
+      sampling = score_sampling()
+    )
+  })
+
+  # Same stored seed = same synthetic points; appearance changes spend no
+  # additional estimation budget and do not change the fitted quantities.
+  pca_base_plots <- reactive({
+    result <- results$pca
+    req(result)
+    variables <- .app_integer(input$pca_variables, "Variables", upper = result$p)
+    .app_pca_plots(
+      fit = result$value,
+      seed = result$seed,
+      variables = variables,
+      biplot_labels = isTRUE(input$pca_labels),
+      loading_display = input$pca_loading_display,
+      score_display = input$pca_score_display,
+      center = isTRUE(input$pca_center),
+      sampling = pca_sampling()
+    )
+  })
+
+  biplot_plots <- reactive({
+    result <- results$pca
+    req(result)
+    .app_biplot_plots(
+      fit = result$value,
+      seed = result$seed,
+      alpha = input$alpha,
+      variables = .app_integer(input$pca_variables, "Variables", upper = result$p),
+      biplot_labels = isTRUE(input$pca_labels),
+      center = isTRUE(input$pca_center),
+      sampling = pca_sampling()
+    )
+  })
+
+  output$pca_plot <- renderPlot({
+    validate(need(!is.null(results$pca), "Run PCA to see the plots."))
+    req(identical(input$pca_view, "plot"))
+    kind <- input$pca_plot_kind %||% "all"
+    if (kind == "biplot") {
+      plots <- biplot_plots()
+    } else {
+      plots <- pca_base_plots()
+      if (kind == "all") {
+        biplots <- biplot_plots()
+        for (version in intersect(names(plots), names(biplots))) {
+          plots[[version]]$plots$biplot <- biplots[[version]]$plots$biplot
+        }
+      }
+    }
+    .app_draw_pca(plots, view = kind,
+      version = .app_version(input$pca_version,
+        !is.null(results$pca$value$nonprivate)))
+  }, height = function() {
+    width <- session$clientData$output_pca_plot_width
+    if (length(width) != 1L || !is.finite(width) || width <= 0) width <- 900
+    kind <- input$pca_plot_kind %||% "all"
+    ver <- .app_version(input$pca_version,
+      !is.null(results$pca) && !is.null(results$pca$value$nonprivate))
+    if (kind == "all") {
+      h <- max(440, min(720, round(width * 0.67)))
+      if (ver == "compare") h <- 2L * h
+    } else {
+      h <- max(340, min(540, round(width * 0.56)))
+    }
+    as.integer(h)
+  }, res = 110)
+
+  pca_summary <- reactive({
+    req(results$pca)
+    summary(results$pca$value)
+  })
+
+  output$importance <- renderTable({
+    values <- pca_summary()$importance
+    data.frame(
+      Component = colnames(values),
+      Eigenvalue = signif(values["Eigenvalue", ], 5),
+      `PVE (%)` = round(100 * values["PVE", ], 2),
+      `Cumulative PVE (%)` = round(100 * values["Cumulative PVE", ], 2),
+      row.names = NULL,
+      check.names = FALSE
+    )
+  }, striped = TRUE, spacing = "s", digits = 5)
+
+  output$pca_budget <- renderTable({
+    .app_budget_table(pca_summary()$budget)
+  }, striped = TRUE, spacing = "s", align = "lrr")
+
+  output$loading_plot <- renderPlot({
+    fit <- results$loading
+    validate(need(!is.null(fit), "Run Loading to see the plots."))
+    req(identical(input$loading_view, "plot"))
+    displays <- loading_displayed()
+    validate(need(length(displays) > 0L, "Select a loading display on the left, or choose one in Show."))
+    .app_draw_loading(loading_plots(), display = displays,
+      version = .app_version(input$loading_version, !is.null(fit$value$nonprivate)))
+  }, height = function() {
+    count <- length(loading_displayed())
+    fit <- results$loading
+    reference <- !is.null(fit) && !is.null(fit$value$nonprivate)
+    version <- .app_version(input$loading_version, reference)
+    layout <- .app_loading_layout(max(1L, count), if (version == "compare") 2L else 1L)
+    .app_plot_height(session$clientData$output_loading_plot_width,
+      columns = layout$columns, rows = layout$rows,
+      ratio = 0.87, min_panel = 290, max_panel = 415)
+  }, res = 110)
+
+  output$scree_plot <- renderPlot({
+    fit <- results$scree
+    validate(need(!is.null(fit), "Run Scree to see the plots."))
+    req(identical(input$scree_view, "plot"))
+    .app_draw_scree(fit$value, show = input$scree_show %||% "all",
+      version = .app_version(input$scree_version, !is.null(fit$value$nonprivate)))
+  }, height = function() {
+    fit <- results$scree
+    has_reference <- !is.null(fit) && !is.null(fit$value$nonprivate)
+    ver <- .app_version(input$scree_version, has_reference)
+    layout <- .app_scree_layout(input$scree_show %||% "all", ver)
+    .app_plot_height(session$clientData$output_scree_plot_width,
+      columns = layout$columns, rows = layout$rows,
+      min_panel = 280, max_panel = 400, ratio = 0.82)
+  }, res = 110)
+
+  output$score_plot <- renderPlot({
+    fit <- results$score
+    validate(need(!is.null(fit), "Run Score to see the distributions."))
+    req(identical(input$score_view, "plot"))
+    displays <- score_displayed()
+    validate(need(length(displays) > 0L, "Select a score display on the left, or choose one in Show."))
+    .app_draw_score(
+      score_plots(), display = displays,
+      version = .app_version(input$score_version, !is.null(fit$value$nonprivate)),
+      sample_method = input$score_sampling_method %||% "uniform"
+    )
+  }, height = function() {
+    fit <- results$score
+    has_ref <- !is.null(fit) && !is.null(fit$value$nonprivate)
+    ver <- .app_version(input$score_version, has_ref)
+    n_keys <- if (is.null(fit)) 1L else {
+      length(switch(ver,
+        private = intersect(c("add", "sparse"), fit$value$metadata$methods),
+        nonprivate = "reference",
+        compare = c("reference", intersect(c("add", "sparse"), fit$value$metadata$methods))
+      ))
+    }
+    displays <- score_displayed()
+    layout <- .app_score_layout(n_keys, max(1L, length(displays)), ver)
+    .app_plot_height(session$clientData$output_score_plot_width,
+      columns = layout$columns, rows = layout$rows,
+      ratio = .95, min_panel = 280, max_panel = 400)
+  }, res = 110)
+
 }
 
 shinyApp(ui, server)
-
-

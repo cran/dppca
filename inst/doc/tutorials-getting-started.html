@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Getting Started with dppca</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Getting Started with dppca</h1>
+
+
+<div id="TOC">
+<ul>
+<li><a href="#choose-a-starting-point" id="toc-choose-a-starting-point">Choose a starting point</a></li>
+<li><a href="#install-and-load-the-package" id="toc-install-and-load-the-package">1. Install and load the
+package</a></li>
+<li><a href="#prepare-your-input-data" id="toc-prepare-your-input-data">2. Prepare your input data</a></li>
+<li><a href="#explore-the-example-datasets" id="toc-explore-the-example-datasets">3. Explore the Example
+Datasets</a></li>
+<li><a href="#set-and-allocate-the-privacy-budget" id="toc-set-and-allocate-the-privacy-budget">4. Set and Allocate the
+Privacy Budget</a></li>
+<li><a href="#next-steps" id="toc-next-steps">5. Next steps</a></li>
+</ul>
+</div>
+
+<style>
+.gs-table table {
+width: 100%;
+table-layout: fixed;
+}
+.gs-table th, .gs-table td {
+padding: 8px 10px !important;
+vertical-align: top;
+overflow-wrap: break-word;
+}
+.gs-datasets-table colgroup col:nth-child(1) { width: 13% !important; }
+.gs-datasets-table colgroup col:nth-child(2) { width: 11% !important; }
+.gs-datasets-table colgroup col:nth-child(3) { width: 13% !important; }
+.gs-datasets-table colgroup col:nth-child(4) { width: 63% !important; }
+.gs-vowel-table colgroup col:nth-child(1) { width: 22% !important; }
+.gs-vowel-table colgroup col:nth-child(2) { width: 78% !important; }
+.gs-component-table th:first-child { width: 22% !important; }
+.gs-budget-table th:nth-child(1) { width: 24% !important; }
+.gs-budget-table th:nth-child(2) { width: 41% !important; }
+.gs-budget-table th:nth-child(3) { width: 35% !important; }
+.gs-tutorial-table colgroup col:nth-child(1) { width: 48% !important; }
+.gs-tutorial-table colgroup col:nth-child(2) { width: 24% !important; }
+.gs-tutorial-table colgroup col:nth-child(3) { width: 28% !important; }
+</style>
+<p>This guide covers the essentials for getting started with
+<code>dppca</code>: installing and loading the package, understanding
+its example datasets, preparing your own data, and allocating privacy
+budgets with <code>privacy_control()</code>. If you are looking for a
+particular visualization, use the guide below to choose a tutorial and
+its corresponding theory article.</p>
+<div id="choose-a-starting-point" class="section level2">
+<h2>Choose a starting point</h2>
+<p>The <strong>tutorials</strong> explain how to use <code>dppca</code>
+in R, while the <strong>methodology articles</strong> describe the
+statistical concepts and methods. For an introduction to ordinary PCA,
+see <a href="method-pca-background.html">PCA Background</a>.</p>
+<div class="gs-table gs-tutorial-table">
+<table>
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">What you want to do</th>
+<th align="left">Tutorial</th>
+<th align="left">Methodology</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Explore private PC directions and their
+coefficients</td>
+<td align="left"><a href="tutorials-loading-plots.html">DP Loading
+Plot</a></td>
+<td align="left"><a href="method-dp-loading.html">DP Directions
+Methodology</a></td>
+</tr>
+<tr class="even">
+<td align="left">Examine scree values and proportions of variance
+explained (PVE)</td>
+<td align="left"><a href="tutorials-scree-plots.html">DP Scree
+Plot</a></td>
+<td align="left"><a href="method-dp-scree.html">DP Scree
+Methodology</a></td>
+</tr>
+<tr class="odd">
+<td align="left">Visualize private score distributions and compare
+groups</td>
+<td align="left"><a href="tutorials-score-plots.html">DP Score
+Plot</a></td>
+<td align="left"><a href="method-dp-score.html">DP Score
+Methodology</a></td>
+</tr>
+<tr class="even">
+<td align="left">Explore loading, scree, score, variable, and biplot
+views in one workflow</td>
+<td align="left"><a href="tutorials-dp-visualization.html">DP PCA
+Visualization</a></td>
+<td align="left"><a href="method-dp-visualization.html">DP PCA
+Visualization Methodology</a></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>For complete argument descriptions and return values, see <a href="https://yejinjo0220.github.io/dppca/reference/index.html">Functions</a>.</p>
+</div>
+<div id="install-and-load-the-package" class="section level2">
+<h2>1. Install and load the package</h2>
+<p>Install the released version of <code>dppca</code> from CRAN:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">install.packages</span>(<span class="st">&quot;dppca&quot;</span>)</span></code></pre></div>
+<p>Alternatively, install the development version from GitHub:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">install.packages</span>(<span class="st">&quot;remotes&quot;</span>)  <span class="co"># Only needed once</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>remotes<span class="sc">::</span><span class="fu">install_github</span>(<span class="st">&quot;yejinjo0220/dppca&quot;</span>)</span></code></pre></div>
+<p>Once installed, load the package:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">library</span>(dppca)</span></code></pre></div>
+</div>
+<div id="prepare-your-input-data" class="section level2">
+<h2>2. Prepare your input data</h2>
+<p>In <code>dppca</code>, rows represent observations and columns
+represent variables. Numeric features are used for PCA. For functions
+supporting <code>group</code> (such as <code>dp_score()</code> and
+<code>dp_pca()</code>), a data frame may also contain categorical
+columns; the selected grouping column is excluded from PCA features.
+Other non-numeric columns are not included in the PCA calculation.</p>
+<p>The private PCA method implemented in <code>dppca</code> is based on
+pairwise differences of observations and therefore does not require
+explicit centering. Also, if standardization is needed, it should be
+performed before applying <code>dppca</code>. When standardization
+involves estimating parameters from sensitive data, the preprocessing
+must satisfy differential privacy, and its privacy budget must be
+included in the total privacy budget.</p>
+</div>
+<div id="explore-the-example-datasets" class="section level2">
+<h2>3. Explore the Example Datasets</h2>
+<p>The <code>dppca</code> package provides several example datasets for
+demonstrating its functions. These include numeric datasets and datasets
+containing categorical variables for grouped visualizations.</p>
+<div class="gs-table gs-datasets-table">
+<table>
+<colgroup>
+<col width="25%" />
+<col width="25%" />
+<col width="25%" />
+<col width="25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Dataset</th>
+<th align="right">Rows</th>
+<th align="right">Columns</th>
+<th align="left">What it contains</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>gau</code></td>
+<td align="right">1,000</td>
+<td align="right">20</td>
+<td align="left">Numeric variables <code>V1</code>–<code>V20</code> from
+five synthetic Gaussian clusters, with 200 observations per
+cluster.</td>
+</tr>
+<tr class="even">
+<td align="left"><code>gau_g</code></td>
+<td align="right">1,000</td>
+<td align="right">21</td>
+<td align="left">The same 20 numeric variables plus the character label
+<code>group</code>, with values
+<code>group1</code>–<code>group5</code>.</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>vowel</code></td>
+<td align="right">990</td>
+<td align="right">14</td>
+<td align="left">Ten acoustic measurements and four categorical columns
+describing British English vowel observations.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The Gaussian clusters differ in means and covariance scales.
+<code>gau_g</code> adds grouping labels to the observations in
+<code>gau</code>; it is not a separate sample.</p>
+<div id="gaussian-data" class="section level3">
+<h3>3.1. Gaussian data</h3>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">data</span>(<span class="st">&quot;gau&quot;</span>, <span class="at">package =</span> <span class="st">&quot;dppca&quot;</span>)</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="fu">data</span>(<span class="st">&quot;gau_g&quot;</span>, <span class="at">package =</span> <span class="st">&quot;dppca&quot;</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="fu">dim</span>(gau)</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt; [1] 1000   20</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="fu">dim</span>(gau_g)</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; [1] 1000   21</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="fu">head</span>(gau[, <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>, <span class="at">drop =</span> <span class="cn">FALSE</span>])</span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt;           V1         V2          V3         V4</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt; 1  0.7019527 -0.2136231 -0.36868434 -0.8423263</span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co">#&gt; 2  0.3361815  1.1978761  0.97822807  0.1018881</span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt; 3  0.7498257  0.2318031 -0.30707361 -0.8979258</span></span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="co">#&gt; 4 -0.8008823 -0.5028415 -0.05840928  1.3939254</span></span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a><span class="co">#&gt; 5 -0.1227414  0.6304571  0.35253375 -2.4865239</span></span>
+<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a><span class="co">#&gt; 6  0.6642886  0.9572975 -0.18232763  0.4012941</span></span>
+<span id="cb4-16"><a href="#cb4-16" tabindex="-1"></a><span class="fu">table</span>(gau_g<span class="sc">$</span>group)</span>
+<span id="cb4-17"><a href="#cb4-17" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-18"><a href="#cb4-18" tabindex="-1"></a><span class="co">#&gt; group1 group2 group3 group4 group5 </span></span>
+<span id="cb4-19"><a href="#cb4-19" tabindex="-1"></a><span class="co">#&gt;    200    200    200    200    200</span></span></code></pre></div>
+<p>The variables <code>V1</code>–<code>V20</code> are numeric features.
+The <code>group</code> column in <code>gau_g</code> identifies five
+groups and can be used as a categorical label in analyses that support
+grouping.</p>
+<p>For more details about the datasets, see the documentation for <a href="../reference/gau.html"><code>gau</code></a> and <a href="../reference/gau_g.html"><code>gau_g</code></a>.</p>
+</div>
+<div id="vowel-data" class="section level3">
+<h3>3.2. Vowel data</h3>
+<p>The <code>vowel</code> dataset contains 990 observations of spoken
+British English vowels from 15 speakers, covering 11 vowel categories.
+Each observation consists of ten numeric acoustic measurements
+(<code>F0</code>–<code>F9</code>) and four categorical variables
+(<code>Split</code>, <code>Speaker</code>, <code>Sex</code>, and
+<code>Class</code>).</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">data</span>(<span class="st">&quot;vowel&quot;</span>, <span class="at">package =</span> <span class="st">&quot;dppca&quot;</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>numeric_columns <span class="ot">&lt;-</span> <span class="fu">vapply</span>(vowel, is.numeric, <span class="fu">logical</span>(<span class="dv">1</span>))</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="fu">dim</span>(vowel)</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="co">#&gt; [1] 990  14</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="fu">names</span>(vowel)[numeric_columns]</span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co">#&gt;  [1] &quot;F0&quot; &quot;F1&quot; &quot;F2&quot; &quot;F3&quot; &quot;F4&quot; &quot;F5&quot; &quot;F6&quot; &quot;F7&quot; &quot;F8&quot; &quot;F9&quot;</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="fu">names</span>(vowel)[<span class="sc">!</span>numeric_columns]</span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="co">#&gt; [1] &quot;Split&quot;   &quot;Speaker&quot; &quot;Sex&quot;     &quot;Class&quot;</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="fu">table</span>(vowel<span class="sc">$</span>Class)</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a><span class="co">#&gt;  0  1  2  3  4  5  6  7  8  9 10 </span></span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="co">#&gt; 90 90 90 90 90 90 90 90 90 90 90</span></span></code></pre></div>
+<p>The variables in the dataset are summarized below.</p>
+<div class="gs-table gs-vowel-table">
+<table>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Columns</th>
+<th align="left">Role</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>F0</code>–<code>F9</code></td>
+<td align="left">Ten numeric acoustic features used for PCA.</td>
+</tr>
+<tr class="even">
+<td align="left"><code>Split</code></td>
+<td align="left">Training/test-set label.</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>Speaker</code></td>
+<td align="left">Speaker identifier, with 15 levels.</td>
+</tr>
+<tr class="even">
+<td align="left"><code>Sex</code></td>
+<td align="left">Speaker descriptor.</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>Class</code></td>
+<td align="left">Vowel category, with 11 levels. This variable can be
+used for grouped score visualizations.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>For more details about the dataset, see the documentation for <a href="../reference/vowel.html"><code>vowel</code></a>.</p>
+</div>
+</div>
+<div id="set-and-allocate-the-privacy-budget" class="section level2">
+<h2>4. Set and Allocate the Privacy Budget</h2>
+<p>The <code>privacy_control()</code> function specifies the privacy
+budget for PCA estimation in <code>dppca</code>. The privacy parameters,
+<code>eps</code> and <code>delta</code>, are allocated to three
+components:</p>
+<div class="gs-table gs-component-table">
+<table>
+<thead>
+<tr class="header">
+<th align="left">Component</th>
+<th align="left">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>loading</code></td>
+<td align="left">Estimation of private principal component
+directions.</td>
+</tr>
+<tr class="even">
+<td align="left"><code>scree</code></td>
+<td align="left">Estimation of private scree values and PVE.</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>score</code></td>
+<td align="left">Construction of private score visualizations.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The <code>dppca</code> package provides three functions for
+individual analyses: <code>dp_loading()</code>, <code>dp_scree()</code>,
+and <code>dp_score()</code>. The <code>dp_pca()</code> function combines
+these analyses into a single workflow. Since these functions involve
+different estimation steps, the required privacy budget components
+depend on the function used.</p>
+<div id="default-privacy-budget-allocation" class="section level3">
+<h3>4.1. Default privacy budget allocation</h3>
+<p>The total privacy budget can be specified using <code>eps</code> and
+<code>delta</code>:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>privacy <span class="ot">&lt;-</span> <span class="fu">privacy_control</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  <span class="at">eps =</span> <span class="dv">6</span>,</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="at">delta =</span> <span class="fl">1e-4</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>)</span></code></pre></div>
+<p>When <code>split</code> is omitted, the fitting function
+automatically divides the total budget equally among its required
+components.</p>
+<div class="gs-table gs-budget-table">
+<table>
+<thead>
+<tr class="header">
+<th align="left">Fitting function</th>
+<th align="left">Required components</th>
+<th align="left">Default allocation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>dp_loading()</code></td>
+<td align="left"><code>loading</code></td>
+<td align="left">100%</td>
+</tr>
+<tr class="even">
+<td align="left"><code>dp_scree()</code></td>
+<td align="left"><code>loading</code>, <code>scree</code></td>
+<td align="left">50% each</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>dp_score()</code></td>
+<td align="left"><code>loading</code>, <code>score</code></td>
+<td align="left">50% each</td>
+</tr>
+<tr class="even">
+<td align="left"><code>dp_pca()</code></td>
+<td align="left"><code>loading</code>, <code>scree</code>,
+<code>score</code></td>
+<td align="left">1/3 each</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>For example, when the specified total budget is <code>eps = 6</code>
+and <code>delta = 1e-4</code>:</p>
+<ul>
+<li><code>dp_loading()</code> allocates the entire budget to direction
+estimation.</li>
+<li><code>dp_scree()</code> and <code>dp_score()</code> allocate epsilon
+<code>3</code> and delta <code>5e-5</code> to each of their two
+components.</li>
+<li><code>dp_pca()</code> allocates epsilon <code>2</code> and delta
+<code>1e-4 / 3</code> to each of its three components.</li>
+</ul>
+<p>The total budget and its allocations can be inspected using:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>privacy<span class="sc">$</span>total</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="co">#&gt;   eps delta </span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="co">#&gt; 6e+00 1e-04</span></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>privacy<span class="sc">$</span>budgets</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co">#&gt; $loading</span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="co">#&gt;          eps        delta </span></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="co">#&gt; 2.000000e+00 3.333333e-05 </span></span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="co">#&gt; $scree</span></span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="co">#&gt;          eps        delta </span></span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a><span class="co">#&gt; 2.000000e+00 3.333333e-05 </span></span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a><span class="co">#&gt; $score</span></span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a><span class="co">#&gt;          eps        delta </span></span>
+<span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a><span class="co">#&gt; 2.000000e+00 3.333333e-05</span></span></code></pre></div>
+<p>The <code>total</code> field contains the overall budget, and
+<code>budgets</code> contains its component allocations.</p>
+</div>
+<div id="customize-the-budget-allocation" class="section level3">
+<h3>4.2. Customize the budget allocation</h3>
+<p>To change the default allocation, use the <code>split</code> argument
+to specify the proportion of the total budget assigned to each
+component. The proportions must be positive, named, and sum to one. The
+same proportions are applied to both epsilon and delta.</p>
+<p>For example, to allocate more budget to scree and score estimation in
+<code>dp_pca()</code>:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>pca_privacy_custom <span class="ot">&lt;-</span> <span class="fu">privacy_control</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>  <span class="at">eps =</span> <span class="dv">6</span>,</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>  <span class="at">delta =</span> <span class="fl">1e-4</span>,</span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>  <span class="at">split =</span> <span class="fu">c</span>(<span class="at">loading =</span> <span class="fl">0.2</span>, <span class="at">scree =</span> <span class="fl">0.4</span>, <span class="at">score =</span> <span class="fl">0.4</span>)</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>)</span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a>pca_privacy_custom<span class="sc">$</span>budgets</span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co">#&gt; $loading</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt;     eps   delta </span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co">#&gt; 1.20000 0.00002 </span></span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a><span class="co">#&gt; $scree</span></span>
+<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a><span class="co">#&gt;     eps   delta </span></span>
+<span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a><span class="co">#&gt; 2.40000 0.00004 </span></span>
+<span id="cb8-15"><a href="#cb8-15" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb8-16"><a href="#cb8-16" tabindex="-1"></a><span class="co">#&gt; $score</span></span>
+<span id="cb8-17"><a href="#cb8-17" tabindex="-1"></a><span class="co">#&gt;     eps   delta </span></span>
+<span id="cb8-18"><a href="#cb8-18" tabindex="-1"></a><span class="co">#&gt; 2.40000 0.00004</span></span></code></pre></div>
+<p>Similarly, for <code>dp_score()</code>, a different allocation can be
+specified as follows:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>score_privacy_custom <span class="ot">&lt;-</span> <span class="fu">privacy_control</span>(</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>  <span class="at">eps =</span> <span class="dv">6</span>,</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>  <span class="at">delta =</span> <span class="fl">1e-4</span>,</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>  <span class="at">split =</span> <span class="fu">c</span>(<span class="at">loading =</span> <span class="fl">0.4</span>, <span class="at">score =</span> <span class="fl">0.6</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a>)</span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a>score_privacy_custom<span class="sc">$</span>budgets</span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a><span class="co">#&gt; $loading</span></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="co">#&gt;     eps   delta </span></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a><span class="co">#&gt; 2.40000 0.00004 </span></span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a><span class="co">#&gt; $score</span></span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a><span class="co">#&gt;     eps   delta </span></span>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a><span class="co">#&gt; 3.60000 0.00006</span></span></code></pre></div>
+</div>
+<div id="specify-individual-component-budgets" class="section level3">
+<h3>4.3. Specify individual component budgets</h3>
+<p>Alternatively, epsilon and delta can be specified separately for each
+component, without using a total budget or <code>split</code>.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>pca_privacy_absolute <span class="ot">&lt;-</span> <span class="fu">privacy_control</span>(</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  <span class="at">loading =</span> <span class="fu">c</span>(<span class="at">eps =</span> <span class="dv">2</span>, <span class="at">delta =</span> <span class="fl">2e-5</span>),</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>  <span class="at">scree   =</span> <span class="fu">c</span>(<span class="at">eps =</span> <span class="dv">3</span>, <span class="at">delta =</span> <span class="fl">3e-5</span>),</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="at">score   =</span> <span class="fu">c</span>(<span class="at">eps =</span> <span class="dv">5</span>, <span class="at">delta =</span> <span class="fl">5e-5</span>)</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>)</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a>pca_privacy_absolute<span class="sc">$</span>total</span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="co">#&gt;   eps delta </span></span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a><span class="co">#&gt; 1e+01 1e-04</span></span></code></pre></div>
+<p>In this example, the total budget is epsilon <code>10</code> and
+delta <code>1e-4</code>. Unlike the proportional allocation approach,
+this allows epsilon and delta to have different allocation
+proportions.</p>
+<p>The total-budget and individual-component approaches should not be
+combined in a single call.</p>
+</div>
+</div>
+<div id="next-steps" class="section level2">
+<h2>5. Next steps</h2>
+<p>With the package installed, the input data prepared, and the privacy
+budget specified, you are ready to explore differentially private PCA
+visualizations. Start with the <a href="tutorials-loading-plots.html">DP
+Loading Plot Tutorial</a> to estimate and visualize private PC
+directions, or choose another tutorial from the overview.</p>
+<hr />
+<p><strong>Next:</strong> <a href="tutorials-loading-plots.html">DP
+Loading Plot</a><br />
+<strong>Tutorial overview:</strong> <a href="#choose-a-starting-point">Choose a starting point</a></p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
